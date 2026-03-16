@@ -10,11 +10,17 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Bibliotecas de Exportação -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; }
+        /* Estilo para garantir que o logo carregue antes da captura */
+        .print-logo { width: 120px; height: auto; }
+        #export-area { position: absolute; left: -9999px; top: -9999px; width: 800px; background: white; }
     </style>
 </head>
 <body class="bg-slate-100">
@@ -31,6 +37,7 @@
         };
 
         const App = () => {
+            const exportRef = useRef();
             const [formData, setFormData] = useState({
                 bloco: '', ciclo: '', diasCiclo: '', totalTransplantado: '', totalColhido: '',
                 custosInsumos: [{ descricao: '', valor: '' }],
@@ -87,10 +94,97 @@
                 });
             };
 
+            // Função para Exportar
+            const exportar = async (formato) => {
+                const element = exportRef.current;
+                const canvas = await html2canvas(element, {
+                    scale: 2,
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: "#ffffff"
+                });
+                
+                const imgData = canvas.toDataURL('image/jpeg', 0.9);
+
+                if (formato === 'jpg') {
+                    const link = document.createElement('a');
+                    link.download = `relatorio-fazenda-oasis-${Date.now()}.jpg`;
+                    link.href = imgData;
+                    link.click();
+                } else {
+                    const { jsPDF } = window.jspdf;
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const imgProps = pdf.getImageProperties(imgData);
+                    const pdfWidth = pdf.internal.pageSize.getWidth();
+                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+                    pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
+                    pdf.save(`relatorio-fazenda-oasis-${Date.now()}.pdf`);
+                }
+            };
+
             return (
                 <div className="min-h-screen flex flex-col pb-10">
                     <div className="h-2 w-full bg-emerald-600"></div>
                     
+                    {/* ÁREA INVISÍVEL PARA EXPORTAÇÃO (Garante que nada seja cortado) */}
+                    <div id="export-area" ref={exportRef} className="p-10">
+                        <div className="flex items-center justify-between border-b-2 border-emerald-600 pb-6 mb-8">
+                            <div className="flex items-center gap-4">
+                                <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-16 w-auto" />
+                                <div>
+                                    <h1 className="text-2xl font-black text-emerald-800 uppercase leading-none">Fazenda Oasis</h1>
+                                    <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Relatório de Produção e Custos</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Data do Arquivo</p>
+                                <p className="text-sm font-bold text-slate-800">{new Date().toLocaleDateString('pt-BR')}</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-8">
+                            {relatorios.map(rel => (
+                                <div key={rel.id} className="border border-slate-200 rounded-xl p-6 bg-white">
+                                    <div className="flex justify-between items-start mb-4 border-b pb-4">
+                                        <div>
+                                            <p className="text-xs font-black text-emerald-600 uppercase">{rel.bloco} • {rel.dataRegistro}</p>
+                                            <h2 className="text-xl font-black text-slate-800 uppercase">{rel.ciclo}</h2>
+                                            <p className="text-xs font-bold text-slate-500">{rel.diasCiclo} dias de ciclo</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase">Total do Lote</p>
+                                            <p className="text-xl font-black text-emerald-600">R$ {rel.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-8 text-sm">
+                                        <div>
+                                            <h4 className="font-black text-slate-400 uppercase text-[10px] mb-2 tracking-tighter">Insumos Utilizados</h4>
+                                            <ul className="space-y-1">
+                                                {rel.custosInsumos.map((ins, idx) => (
+                                                    <li key={idx} className="flex justify-between text-xs">
+                                                        <span>{ins.descricao || 'Item s/ nome'}</span>
+                                                        <span className="font-bold">R$ {parseFloat(ins.valor || 0).toFixed(2)}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-slate-400 uppercase text-[10px] mb-2 tracking-tighter">Custos Operacionais</h4>
+                                            <ul className="space-y-1">
+                                                {rel.custosOperacionais.map((op, idx) => (
+                                                    <li key={idx} className="flex justify-between text-xs">
+                                                        <span>{op.categoria || 'Outros'}</span>
+                                                        <span className="font-bold">R$ {parseFloat(op.valor || 0).toFixed(2)}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
                     <header className="bg-white shadow-sm border-b p-6">
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-4">
@@ -100,11 +194,21 @@
                                     <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Gestão de Produção</p>
                                 </div>
                             </div>
-                            <div className="text-right">
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total Acumulado</p>
-                                <p className="text-2xl font-black text-emerald-600">
-                                    R$ {relatorios.reduce((acc, curr) => acc + curr.totalGeral, 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                                </p>
+                            <div className="flex items-center gap-6">
+                                <div className="text-right">
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total Geral</p>
+                                    <p className="text-2xl font-black text-emerald-600">
+                                        R$ {relatorios.reduce((acc, curr) => acc + curr.totalGeral, 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                    </p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => exportar('jpg')} className="bg-white border-2 border-emerald-600 text-emerald-600 p-2 rounded-xl hover:bg-emerald-50 transition-all flex items-center gap-2 text-[10px] font-black uppercase">
+                                        <Icon name="image" className="w-4 h-4" /> JPEG
+                                    </button>
+                                    <button onClick={() => exportar('pdf')} className="bg-emerald-600 text-white p-2 rounded-xl hover:bg-emerald-700 transition-all flex items-center gap-2 text-[10px] font-black uppercase shadow-lg shadow-emerald-100">
+                                        <Icon name="file-text" className="w-4 h-4" /> PDF
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </header>
@@ -185,7 +289,7 @@
                                 </form>
                             </div>
 
-                            {/* Histórico */}
+                            {/* Histórico Visual */}
                             <div className="lg:w-1/2">
                                 <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden sticky top-6">
                                     <div className="p-6 bg-slate-50 border-b flex items-center gap-2">
@@ -210,12 +314,6 @@
                                                         <p className="font-black text-emerald-600 text-lg">R$ {rel.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                                                     </div>
                                                 </div>
-                                                
-                                                <div className="grid grid-cols-2 gap-4 text-[10px] font-bold">
-                                                    <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100 text-emerald-700">Insumos: R$ {rel.totalInsumos.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
-                                                    <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 text-blue-700">Operacional: R$ {rel.totalOperacional.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
-                                                </div>
-
                                                 <div className="mt-4 flex items-center gap-2 text-[10px] font-black uppercase text-slate-400">
                                                     <span>Eficiência Colheita:</span>
                                                     <div className="flex-grow bg-slate-100 h-1.5 rounded-full overflow-hidden">
