@@ -20,7 +20,6 @@
         body { font-family: 'Inter', sans-serif; }
         #export-area { position: absolute; left: -9999px; top: -9999px; width: 800px; background: white; }
         input[type="date"]::-webkit-calendar-picker-indicator { cursor: pointer; }
-        /* Custom scrollbar para o histórico */
         .custom-scroll::-webkit-scrollbar { width: 6px; }
         .custom-scroll::-webkit-scrollbar-track { background: transparent; }
         .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
@@ -42,7 +41,7 @@
         const App = () => {
             const exportRef = useRef();
             const [formData, setFormData] = useState({
-                bloco: '', ciclo: '', dataInicio: '', dataTermino: '', diasCiclo: '', 
+                bloco: '', ciclo: '', dataInicio: '', dataTermino: '', diasCiclo: 0, 
                 totalTransplantado: '', totalColhido: '',
                 custosInsumos: [{ descricao: '', valor: '' }],
                 custosOperacionais: [{ categoria: '', valor: '' }]
@@ -51,18 +50,25 @@
             const [relatorios, setRelatorios] = useState([]);
             const categoriasOperacionais = ["Enel", "Folha", "MEI", "Avulso", "Capina", "Outros"];
 
-            // Cálculos automáticos em tempo real
+            // Lógica de Soma em Tempo Real aprimorada
             const somaInsumosForm = useMemo(() => {
-                return formData.custosInsumos.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+                return formData.custosInsumos.reduce((acc, curr) => {
+                    const cleanValue = String(curr.valor).replace(',', '.');
+                    const val = parseFloat(cleanValue) || 0;
+                    return acc + val;
+                }, 0);
             }, [formData.custosInsumos]);
 
             const somaOperacionalForm = useMemo(() => {
-                return formData.custosOperacionais.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+                return formData.custosOperacionais.reduce((acc, curr) => {
+                    const cleanValue = String(curr.valor).replace(',', '.');
+                    const val = parseFloat(cleanValue) || 0;
+                    return acc + val;
+                }, 0);
             }, [formData.custosOperacionais]);
 
             const totalGeralForm = somaInsumosForm + somaOperacionalForm;
 
-            // Cálculo automático de dias
             useEffect(() => {
                 if (formData.dataInicio && formData.dataTermino) {
                     const inicio = new Date(formData.dataInicio);
@@ -109,7 +115,7 @@
                 };
                 setRelatorios([novoRelatorio, ...relatorios]);
                 setFormData({
-                    bloco: '', ciclo: '', dataInicio: '', dataTermino: '', diasCiclo: '', 
+                    bloco: '', ciclo: '', dataInicio: '', dataTermino: '', diasCiclo: 0, 
                     totalTransplantado: '', totalColhido: '',
                     custosInsumos: [{ descricao: '', valor: '' }],
                     custosOperacionais: [{ categoria: '', valor: '' }]
@@ -140,7 +146,7 @@
                 <div className="min-h-screen flex flex-col pb-10">
                     <div className="h-2 w-full bg-emerald-600"></div>
 
-                    {/* ÁREA DE EXPORTAÇÃO (MESMO PADRÃO ANTERIOR) */}
+                    {/* ÁREA DE EXPORTAÇÃO OCULTA */}
                     <div id="export-area" ref={exportRef} className="p-10">
                         <div className="flex items-center justify-between border-b-2 border-emerald-600 pb-6 mb-8">
                             <div className="flex items-center gap-4">
@@ -166,20 +172,28 @@
                                     </div>
                                     <div className="grid grid-cols-2 gap-8 text-sm">
                                         <div>
-                                            <h4 className="font-black text-emerald-600 uppercase text-[10px] mb-2">Insumos: R$ {rel.totalInsumos.toFixed(2)}</h4>
-                                            <ul className="space-y-1">
+                                            <h4 className="font-black text-emerald-600 uppercase text-[10px] mb-2 border-b">Insumos</h4>
+                                            <ul className="space-y-1 mb-2">
                                                 {rel.custosInsumos.map((ins, idx) => (
                                                     <li key={idx} className="flex justify-between text-[10px]"><span>{ins.descricao || 'Item'}</span><span className="font-bold">R$ {parseFloat(ins.valor || 0).toFixed(2)}</span></li>
                                                 ))}
                                             </ul>
+                                            <div className="flex justify-between text-[10px] font-black pt-1 border-t border-emerald-100 uppercase">
+                                                <span>TOTAL INSUMOS</span>
+                                                <span>R$ {rel.totalInsumos.toFixed(2)}</span>
+                                            </div>
                                         </div>
                                         <div>
-                                            <h4 className="font-black text-blue-600 uppercase text-[10px] mb-2">Operacional: R$ {rel.totalOperacional.toFixed(2)}</h4>
-                                            <ul className="space-y-1">
+                                            <h4 className="font-black text-blue-600 uppercase text-[10px] mb-2 border-b">Operacional</h4>
+                                            <ul className="space-y-1 mb-2">
                                                 {rel.custosOperacionais.map((op, idx) => (
                                                     <li key={idx} className="flex justify-between text-[10px]"><span>{op.categoria || 'Outros'}</span><span className="font-bold">R$ {parseFloat(op.valor || 0).toFixed(2)}</span></li>
                                                 ))}
                                             </ul>
+                                            <div className="flex justify-between text-[10px] font-black pt-1 border-t border-blue-100 uppercase">
+                                                <span>TOTAL OPERACIONAL</span>
+                                                <span>R$ {rel.totalOperacional.toFixed(2)}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -219,13 +233,13 @@
                                         </h2>
                                     </div>
 
-                                    {/* CAMPOS DE TOTAIS EM DESTAQUE */}
+                                    {/* CARTÕES DE TOTAIS EM TEMPO REAL - ATUALIZAM AO DIGITAR */}
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
+                                        <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 shadow-sm">
                                             <p className="text-[10px] font-black text-emerald-600 uppercase mb-1">Total Custo Insumos</p>
                                             <p className="text-xl font-black text-emerald-700">R$ {somaInsumosForm.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                                         </div>
-                                        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                                        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 shadow-sm">
                                             <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Total Custo Operacional</p>
                                             <p className="text-xl font-black text-blue-700">R$ {somaOperacionalForm.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                                         </div>
@@ -234,11 +248,11 @@
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="md:col-span-2">
                                             <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Bloco / Talhão</label>
-                                            <input required name="bloco" value={formData.bloco} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" />
+                                            <input required name="bloco" value={formData.bloco} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 ring-emerald-50" />
                                         </div>
                                         <div className="md:col-span-2">
                                             <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qual Ciclo (Cultura)</label>
-                                            <input required name="ciclo" value={formData.ciclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" />
+                                            <input required name="ciclo" value={formData.ciclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 ring-emerald-50" />
                                         </div>
                                         <div>
                                             <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Data Início</label>
@@ -261,7 +275,7 @@
                                         </div>
                                     </div>
 
-                                    {/* Insumos */}
+                                    {/* Detalhar Insumos */}
                                     <div className="space-y-3 p-4 bg-emerald-50/20 rounded-2xl border border-emerald-100">
                                         <div className="flex justify-between items-center">
                                             <label className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><Icon name="shopping-cart" className="w-3 h-3" /> Detalhar Insumos</label>
@@ -269,14 +283,14 @@
                                         </div>
                                         {formData.custosInsumos.map((c, i) => (
                                             <div key={i} className="flex gap-2">
-                                                <input placeholder="Descrição" name="descricao" value={c.descricao} onChange={(e) => handleCustoInsumoChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white" />
-                                                <input type="number" placeholder="R$" name="valor" value={c.valor} onChange={(e) => handleCustoInsumoChange(i, e)} className="w-24 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white" />
+                                                <input placeholder="Ex: Adubo" name="descricao" value={c.descricao} onChange={(e) => handleCustoInsumoChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white outline-none" />
+                                                <input type="number" step="0.01" placeholder="R$" name="valor" value={c.valor} onChange={(e) => handleCustoInsumoChange(i, e)} className="w-24 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white outline-none" />
                                                 {formData.custosInsumos.length > 1 && <button type="button" onClick={() => removerInsumo(i)} className="text-rose-400"><Icon name="trash-2" className="w-4 h-4" /></button>}
                                             </div>
                                         ))}
                                     </div>
 
-                                    {/* Operacionais */}
+                                    {/* Detalhar Operacional */}
                                     <div className="space-y-3 p-4 bg-blue-50/20 rounded-2xl border border-blue-100">
                                         <div className="flex justify-between items-center">
                                             <label className="text-[10px] font-black text-blue-700 uppercase tracking-widest flex items-center gap-2"><Icon name="wrench" className="w-3 h-3" /> Detalhar Operacional</label>
@@ -284,11 +298,11 @@
                                         </div>
                                         {formData.custosOperacionais.map((o, i) => (
                                             <div key={i} className="flex gap-2">
-                                                <select name="categoria" value={o.categoria} onChange={(e) => handleOperacionalChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white">
+                                                <select name="categoria" value={o.categoria} onChange={(e) => handleOperacionalChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white outline-none">
                                                     <option value="">Categoria...</option>
                                                     {categoriasOperacionais.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                                 </select>
-                                                <input type="number" placeholder="R$" name="valor" value={o.valor} onChange={(e) => handleOperacionalChange(i, e)} className="w-24 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white" />
+                                                <input type="number" step="0.01" placeholder="R$" name="valor" value={o.valor} onChange={(e) => handleOperacionalChange(i, e)} className="w-24 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white outline-none" />
                                                 {formData.custosOperacionais.length > 1 && <button type="button" onClick={() => removerOperacional(i)} className="text-rose-400"><Icon name="trash-2" className="w-4 h-4" /></button>}
                                             </div>
                                         ))}
@@ -300,15 +314,13 @@
                                 </form>
                             </div>
 
-                            {/* HISTÓRICO COM DETALHAMENTO DE ITENS */}
                             <div className="lg:w-1/2">
                                 <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden sticky top-6 flex flex-col max-h-[85vh]">
                                     <div className="p-6 bg-slate-50 border-b flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <Icon name="clipboard-list" className="w-5 h-5 text-emerald-600" />
-                                            <h2 className="text-sm font-black uppercase text-slate-700">Lotes Registrados</h2>
+                                            <h2 className="text-sm font-black uppercase text-slate-700">Histórico de Lotes</h2>
                                         </div>
-                                        <span className="text-[10px] font-black bg-emerald-100 text-emerald-700 px-2 py-1 rounded-lg uppercase">{relatorios.length} Lotes</span>
                                     </div>
                                     <div className="flex-grow overflow-y-auto custom-scroll divide-y">
                                         {relatorios.length === 0 ? (
@@ -326,32 +338,34 @@
                                                     </div>
                                                     <div className="text-right">
                                                         <p className="font-black text-emerald-600 text-lg leading-tight">R$ {rel.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Custo do Lote</p>
+                                                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Custo Total</p>
                                                     </div>
                                                 </div>
 
-                                                {/* Detalhamento de Insumos no Histórico */}
                                                 <div className="mt-4 space-y-3">
+                                                    {/* Insumos no Histórico */}
                                                     <div className="bg-emerald-50/50 p-3 rounded-xl border border-emerald-100">
                                                         <div className="flex justify-between border-b border-emerald-100 pb-1 mb-1 items-center">
                                                             <span className="text-[9px] font-black text-emerald-700 uppercase flex items-center gap-1"><Icon name="shopping-cart" className="w-3 h-3"/> Insumos</span>
-                                                            <span className="text-[9px] font-black text-emerald-700">R$ {rel.totalInsumos.toFixed(2)}</span>
                                                         </div>
                                                         <div className="space-y-1">
                                                             {rel.custosInsumos.map((ins, idx) => (
                                                                 <div key={idx} className="flex justify-between text-[10px] text-slate-600">
-                                                                    <span className="truncate pr-2">{ins.descricao || 'Item sem nome'}</span>
+                                                                    <span className="truncate pr-2">{ins.descricao || 'Item'}</span>
                                                                     <span className="font-bold shrink-0">R$ {parseFloat(ins.valor || 0).toFixed(2)}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
+                                                        <div className="mt-2 pt-1 border-t border-emerald-200 flex justify-between text-[10px] font-black text-emerald-800 uppercase">
+                                                            <span>TOTAL INSUMOS</span>
+                                                            <span>R$ {rel.totalInsumos.toFixed(2)}</span>
+                                                        </div>
                                                     </div>
 
-                                                    {/* Detalhamento de Operacional no Histórico */}
+                                                    {/* Operacional no Histórico */}
                                                     <div className="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
                                                         <div className="flex justify-between border-b border-blue-100 pb-1 mb-1 items-center">
                                                             <span className="text-[9px] font-black text-blue-700 uppercase flex items-center gap-1"><Icon name="wrench" className="w-3 h-3"/> Operacional</span>
-                                                            <span className="text-[9px] font-black text-blue-700">R$ {rel.totalOperacional.toFixed(2)}</span>
                                                         </div>
                                                         <div className="space-y-1">
                                                             {rel.custosOperacionais.map((op, idx) => (
@@ -361,15 +375,11 @@
                                                                 </div>
                                                             ))}
                                                         </div>
+                                                        <div className="mt-2 pt-1 border-t border-blue-200 flex justify-between text-[10px] font-black text-blue-800 uppercase">
+                                                            <span>TOTAL OPERACIONAL</span>
+                                                            <span>R$ {rel.totalOperacional.toFixed(2)}</span>
+                                                        </div>
                                                     </div>
-                                                </div>
-
-                                                <div className="mt-4 flex items-center gap-2 text-[10px] font-black uppercase text-slate-400">
-                                                    <span>Eficiência:</span>
-                                                    <div className="flex-grow bg-slate-100 h-1 rounded-full overflow-hidden">
-                                                        <div className="bg-emerald-500 h-full transition-all duration-500" style={{width: `${Math.min((rel.totalColhido/rel.totalTransplantado)*100, 100)}%`}}></div>
-                                                    </div>
-                                                    <span className="text-slate-700">{Math.round((rel.totalColhido/rel.totalTransplantado)*100)}%</span>
                                                 </div>
                                             </div>
                                         ))}
