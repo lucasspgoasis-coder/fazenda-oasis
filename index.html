@@ -18,8 +18,6 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; }
-        /* Estilo para garantir que o logo carregue antes da captura */
-        .print-logo { width: 120px; height: auto; }
         #export-area { position: absolute; left: -9999px; top: -9999px; width: 800px; background: white; }
     </style>
 </head>
@@ -39,13 +37,25 @@
         const App = () => {
             const exportRef = useRef();
             const [formData, setFormData] = useState({
-                bloco: '', ciclo: '', diasCiclo: '', totalTransplantado: '', totalColhido: '',
+                bloco: '', ciclo: '', dataInicio: '', dataTermino: '', diasCiclo: '', 
+                totalTransplantado: '', totalColhido: '',
                 custosInsumos: [{ descricao: '', valor: '' }],
                 custosOperacionais: [{ categoria: '', valor: '' }]
             });
 
             const [relatorios, setRelatorios] = useState([]);
             const categoriasOperacionais = ["Enel", "Folha", "MEI", "Avulso", "Capina", "Outros"];
+
+            // Cálculo automático de dias quando as datas mudam
+            useEffect(() => {
+                if (formData.dataInicio && formData.dataTermino) {
+                    const inicio = new Date(formData.dataInicio);
+                    const fim = new Date(formData.dataTermino);
+                    const diffTime = Math.abs(fim - inicio);
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    setFormData(prev => ({ ...prev, diasCiclo: diffDays }));
+                }
+            }, [formData.dataInicio, formData.dataTermino]);
 
             const handleChange = (e) => {
                 const { name, value } = e.target;
@@ -88,13 +98,13 @@
 
                 setRelatorios([novoRelatorio, ...relatorios]);
                 setFormData({
-                    bloco: '', ciclo: '', diasCiclo: '', totalTransplantado: '', totalColhido: '',
+                    bloco: '', ciclo: '', dataInicio: '', dataTermino: '', diasCiclo: '', 
+                    totalTransplantado: '', totalColhido: '',
                     custosInsumos: [{ descricao: '', valor: '' }],
                     custosOperacionais: [{ categoria: '', valor: '' }]
                 });
             };
 
-            // Função para Exportar
             const exportar = async (formato) => {
                 const element = exportRef.current;
                 const canvas = await html2canvas(element, {
@@ -126,7 +136,7 @@
                 <div className="min-h-screen flex flex-col pb-10">
                     <div className="h-2 w-full bg-emerald-600"></div>
                     
-                    {/* ÁREA INVISÍVEL PARA EXPORTAÇÃO (Garante que nada seja cortado) */}
+                    {/* ÁREA DE EXPORTAÇÃO */}
                     <div id="export-area" ref={exportRef} className="p-10">
                         <div className="flex items-center justify-between border-b-2 border-emerald-600 pb-6 mb-8">
                             <div className="flex items-center gap-4">
@@ -136,10 +146,6 @@
                                     <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-1">Relatório de Produção e Custos</p>
                                 </div>
                             </div>
-                            <div className="text-right">
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Data do Arquivo</p>
-                                <p className="text-sm font-bold text-slate-800">{new Date().toLocaleDateString('pt-BR')}</p>
-                            </div>
                         </div>
 
                         <div className="space-y-8">
@@ -147,7 +153,7 @@
                                 <div key={rel.id} className="border border-slate-200 rounded-xl p-6 bg-white">
                                     <div className="flex justify-between items-start mb-4 border-b pb-4">
                                         <div>
-                                            <p className="text-xs font-black text-emerald-600 uppercase">{rel.bloco} • {rel.dataRegistro}</p>
+                                            <p className="text-xs font-black text-emerald-600 uppercase">{rel.bloco} • Período: {new Date(rel.dataInicio).toLocaleDateString('pt-BR')} a {new Date(rel.dataTermino).toLocaleDateString('pt-BR')}</p>
                                             <h2 className="text-xl font-black text-slate-800 uppercase">{rel.ciclo}</h2>
                                             <p className="text-xs font-bold text-slate-500">{rel.diasCiclo} dias de ciclo</p>
                                         </div>
@@ -158,18 +164,18 @@
                                     </div>
                                     <div className="grid grid-cols-2 gap-8 text-sm">
                                         <div>
-                                            <h4 className="font-black text-slate-400 uppercase text-[10px] mb-2 tracking-tighter">Insumos Utilizados</h4>
+                                            <h4 className="font-black text-slate-400 uppercase text-[10px] mb-2 tracking-tighter text-emerald-600">Insumos</h4>
                                             <ul className="space-y-1">
                                                 {rel.custosInsumos.map((ins, idx) => (
                                                     <li key={idx} className="flex justify-between text-xs">
-                                                        <span>{ins.descricao || 'Item s/ nome'}</span>
+                                                        <span>{ins.descricao || 'Item'}</span>
                                                         <span className="font-bold">R$ {parseFloat(ins.valor || 0).toFixed(2)}</span>
                                                     </li>
                                                 ))}
                                             </ul>
                                         </div>
                                         <div>
-                                            <h4 className="font-black text-slate-400 uppercase text-[10px] mb-2 tracking-tighter">Custos Operacionais</h4>
+                                            <h4 className="font-black text-slate-400 uppercase text-[10px] mb-2 tracking-tighter text-blue-600">Operacional</h4>
                                             <ul className="space-y-1">
                                                 {rel.custosOperacionais.map((op, idx) => (
                                                     <li key={idx} className="flex justify-between text-xs">
@@ -196,7 +202,7 @@
                             </div>
                             <div className="flex items-center gap-6">
                                 <div className="text-right">
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total Geral</p>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total Acumulado</p>
                                     <p className="text-2xl font-black text-emerald-600">
                                         R$ {relatorios.reduce((acc, curr) => acc + curr.totalGeral, 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
                                     </p>
@@ -215,7 +221,6 @@
 
                     <main className="flex-grow max-w-7xl mx-auto w-full p-6">
                         <div className="flex flex-col lg:flex-row gap-8">
-                            {/* Formulário */}
                             <div className="lg:w-1/2">
                                 <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-6">
                                     <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 border-b pb-4 flex items-center gap-2">
@@ -227,15 +232,23 @@
                                             <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Bloco / Talhão</label>
                                             <input required name="bloco" value={formData.bloco} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" placeholder="Ex: Bloco A" />
                                         </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qual Ciclo</label>
+                                            <input required name="ciclo" value={formData.ciclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" placeholder="Ex: Alface" />
+                                        </div>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qual Ciclo</label>
-                                                <input required name="ciclo" value={formData.ciclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" placeholder="Ex: Alface" />
+                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Data Início</label>
+                                                <input type="date" required name="dataInicio" value={formData.dataInicio} onChange={handleChange} className="w-full px-4 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none font-bold" />
                                             </div>
                                             <div>
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Total Dias Ciclo</label>
-                                                <input type="number" required name="diasCiclo" value={formData.diasCiclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none" />
+                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Data Término</label>
+                                                <input type="date" required name="dataTermino" value={formData.dataTermino} onChange={handleChange} className="w-full px-4 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none font-bold" />
                                             </div>
+                                        </div>
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-dashed border-slate-200">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase">Total Dias Calculados</p>
+                                            <p className="text-lg font-black text-slate-700">{formData.diasCiclo || '0'} dias</p>
                                         </div>
                                     </div>
 
@@ -289,7 +302,6 @@
                                 </form>
                             </div>
 
-                            {/* Histórico Visual */}
                             <div className="lg:w-1/2">
                                 <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden sticky top-6">
                                     <div className="p-6 bg-slate-50 border-b flex items-center gap-2">
@@ -306,7 +318,7 @@
                                             <div key={rel.id} className="p-6 hover:bg-slate-50 transition-colors">
                                                 <div className="flex justify-between items-start mb-4">
                                                     <div>
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{rel.bloco} • {rel.dataRegistro}</p>
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{rel.bloco} • {new Date(rel.dataInicio).toLocaleDateString('pt-BR')} a {new Date(rel.dataTermino).toLocaleDateString('pt-BR')}</p>
                                                         <h3 className="font-black text-slate-800 uppercase text-base">{rel.ciclo}</h3>
                                                         <span className="text-[10px] font-bold text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">{rel.diasCiclo} dias</span>
                                                     </div>
@@ -315,7 +327,7 @@
                                                     </div>
                                                 </div>
                                                 <div className="mt-4 flex items-center gap-2 text-[10px] font-black uppercase text-slate-400">
-                                                    <span>Eficiência Colheita:</span>
+                                                    <span>Eficiência:</span>
                                                     <div className="flex-grow bg-slate-100 h-1.5 rounded-full overflow-hidden">
                                                         <div className="bg-emerald-500 h-full" style={{width: `${Math.min((rel.totalColhido/rel.totalTransplantado)*100, 100)}%`}}></div>
                                                     </div>
