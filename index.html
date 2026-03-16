@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fazenda Oasis - Gestão de Produção</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React, ReactDOM e Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        const Icon = ({ name, className }) => {
+            useEffect(() => {
+                if (window.lucide) window.lucide.createIcons();
+            }, []);
+            return <i data-lucide={name} className={className}></i>;
+        };
+
+        const App = () => {
+            const [formData, setFormData] = useState({
+                bloco: '', ciclo: '', diasCiclo: '', totalTransplantado: '', totalColhido: '',
+                custosInsumos: [{ descricao: '', valor: '' }],
+                custosOperacionais: [{ categoria: '', valor: '' }]
+            });
+
+            const [relatorios, setRelatorios] = useState([]);
+            const categoriasOperacionais = ["Enel", "Folha", "MEI", "Avulso", "Capina", "Outros"];
+
+            const handleChange = (e) => {
+                const { name, value } = e.target;
+                setFormData(prev => ({ ...prev, [name]: value }));
+            };
+
+            const handleCustoInsumoChange = (index, e) => {
+                const { name, value } = e.target;
+                const novos = [...formData.custosInsumos];
+                novos[index][name] = value;
+                setFormData(prev => ({ ...prev, custosInsumos: novos }));
+            };
+
+            const handleOperacionalChange = (index, e) => {
+                const { name, value } = e.target;
+                const novos = [...formData.custosOperacionais];
+                novos[index][name] = value;
+                setFormData(prev => ({ ...prev, custosOperacionais: novos }));
+            };
+
+            const adicionarInsumo = () => setFormData(prev => ({ ...prev, custosInsumos: [...prev.custosInsumos, { descricao: '', valor: '' }] }));
+            const adicionarOperacional = () => setFormData(prev => ({ ...prev, custosOperacionais: [...prev.custosOperacionais, { categoria: '', valor: '' }] }));
+            
+            const removerInsumo = (index) => setFormData(prev => ({ ...prev, custosInsumos: formData.custosInsumos.filter((_, i) => i !== index) }));
+            const removerOperacional = (index) => setFormData(prev => ({ ...prev, custosOperacionais: formData.custosOperacionais.filter((_, i) => i !== index) }));
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const totalInsumos = formData.custosInsumos.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+                const totalOperacional = formData.custosOperacionais.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+
+                const novoRelatorio = {
+                    ...formData,
+                    id: Date.now(),
+                    totalInsumos,
+                    totalOperacional,
+                    totalGeral: totalInsumos + totalOperacional,
+                    dataRegistro: new Date().toLocaleDateString('pt-BR')
+                };
+
+                setRelatorios([novoRelatorio, ...relatorios]);
+                setFormData({
+                    bloco: '', ciclo: '', diasCiclo: '', totalTransplantado: '', totalColhido: '',
+                    custosInsumos: [{ descricao: '', valor: '' }],
+                    custosOperacionais: [{ categoria: '', valor: '' }]
+                });
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col pb-10">
+                    <div className="h-2 w-full bg-emerald-600"></div>
+                    
+                    <header className="bg-white shadow-sm border-b p-6">
+                        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                                <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-12 w-auto" />
+                                <div>
+                                    <h1 className="text-xl font-black text-emerald-800 uppercase leading-none">Fazenda Oasis</h1>
+                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Gestão de Produção</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total Acumulado</p>
+                                <p className="text-2xl font-black text-emerald-600">
+                                    R$ {relatorios.reduce((acc, curr) => acc + curr.totalGeral, 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                </p>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="flex-grow max-w-7xl mx-auto w-full p-6">
+                        <div className="flex flex-col lg:flex-row gap-8">
+                            {/* Formulário */}
+                            <div className="lg:w-1/2">
+                                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-6">
+                                    <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 border-b pb-4 flex items-center gap-2">
+                                        <Icon name="plus-circle" className="w-4 h-4 text-emerald-500" /> Registrar Produção
+                                    </h2>
+
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Bloco / Talhão</label>
+                                            <input required name="bloco" value={formData.bloco} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" placeholder="Ex: Bloco A" />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qual Ciclo</label>
+                                                <input required name="ciclo" value={formData.ciclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" placeholder="Ex: Alface" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Total Dias Ciclo</label>
+                                                <input type="number" required name="diasCiclo" value={formData.diasCiclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qtd. Transplantada</label>
+                                            <input type="number" required name="totalTransplantado" value={formData.totalTransplantado} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qtd. Colhida</label>
+                                            <input type="number" required name="totalColhido" value={formData.totalColhido} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold text-emerald-600 outline-none" />
+                                        </div>
+                                    </div>
+
+                                    {/* Insumos */}
+                                    <div className="space-y-3 p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><Icon name="shopping-cart" className="w-3 h-3" /> Custos Insumos</label>
+                                            <button type="button" onClick={adicionarInsumo} className="text-emerald-600 p-1 hover:bg-emerald-100 rounded-lg border border-emerald-200 bg-white"><Icon name="plus" className="w-4 h-4" /></button>
+                                        </div>
+                                        {formData.custosInsumos.map((c, i) => (
+                                            <div key={i} className="flex gap-2">
+                                                <input placeholder="Descrição" name="descricao" value={c.descricao} onChange={(e) => handleCustoInsumoChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white" />
+                                                <input type="number" placeholder="R$" name="valor" value={c.valor} onChange={(e) => handleCustoInsumoChange(i, e)} className="w-24 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white" />
+                                                {formData.custosInsumos.length > 1 && <button type="button" onClick={() => removerInsumo(i)} className="text-rose-400"><Icon name="trash-2" className="w-4 h-4" /></button>}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Operacionais */}
+                                    <div className="space-y-3 p-4 bg-blue-50/30 rounded-2xl border border-blue-100">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-[10px] font-black text-blue-700 uppercase tracking-widest flex items-center gap-2"><Icon name="wrench" className="w-3 h-3" /> Custos Operacionais</label>
+                                            <button type="button" onClick={adicionarOperacional} className="text-blue-600 p-1 hover:bg-blue-100 rounded-lg border border-blue-200 bg-white"><Icon name="plus" className="w-4 h-4" /></button>
+                                        </div>
+                                        {formData.custosOperacionais.map((o, i) => (
+                                            <div key={i} className="flex gap-2">
+                                                <select name="categoria" value={o.categoria} onChange={(e) => handleOperacionalChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white outline-none">
+                                                    <option value="">Categoria...</option>
+                                                    {categoriasOperacionais.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                                                </select>
+                                                <input type="number" placeholder="R$" name="valor" value={o.valor} onChange={(e) => handleOperacionalChange(i, e)} className="w-24 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white" />
+                                                {formData.custosOperacionais.length > 1 && <button type="button" onClick={() => removerOperacional(i)} className="text-rose-400"><Icon name="trash-2" className="w-4 h-4" /></button>}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <button type="submit" className="w-full bg-emerald-600 text-white font-black py-4 rounded-2xl hover:bg-emerald-700 uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                                        <Icon name="save" className="w-4 h-4" /> Finalizar Lançamento
+                                    </button>
+                                </form>
+                            </div>
+
+                            {/* Histórico */}
+                            <div className="lg:w-1/2">
+                                <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden sticky top-6">
+                                    <div className="p-6 bg-slate-50 border-b flex items-center gap-2">
+                                        <Icon name="clipboard-list" className="w-5 h-5 text-emerald-600" />
+                                        <h2 className="text-sm font-black uppercase text-slate-700">Histórico de Produção</h2>
+                                    </div>
+                                    <div className="divide-y max-h-[70vh] overflow-y-auto">
+                                        {relatorios.length === 0 ? (
+                                            <div className="p-20 text-center opacity-30">
+                                                <Icon name="leaf" className="w-12 h-12 mx-auto mb-4" />
+                                                <p className="text-xs font-bold uppercase tracking-widest">Aguardando Registros</p>
+                                            </div>
+                                        ) : relatorios.map(rel => (
+                                            <div key={rel.id} className="p-6 hover:bg-slate-50 transition-colors">
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{rel.bloco} • {rel.dataRegistro}</p>
+                                                        <h3 className="font-black text-slate-800 uppercase text-base">{rel.ciclo}</h3>
+                                                        <span className="text-[10px] font-bold text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">{rel.diasCiclo} dias</span>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="font-black text-emerald-600 text-lg">R$ {rel.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="grid grid-cols-2 gap-4 text-[10px] font-bold">
+                                                    <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100 text-emerald-700">Insumos: R$ {rel.totalInsumos.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                                                    <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 text-blue-700">Operacional: R$ {rel.totalOperacional.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                                                </div>
+
+                                                <div className="mt-4 flex items-center gap-2 text-[10px] font-black uppercase text-slate-400">
+                                                    <span>Eficiência Colheita:</span>
+                                                    <div className="flex-grow bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                                        <div className="bg-emerald-500 h-full" style={{width: `${Math.min((rel.totalColhido/rel.totalTransplantado)*100, 100)}%`}}></div>
+                                                    </div>
+                                                    <span className="text-slate-700">{Math.round((rel.totalColhido/rel.totalTransplantado)*100)}%</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
