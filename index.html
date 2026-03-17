@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fazenda Oasis - Gestão de Produção</title>
+    <title>Fazenda Oasis - Relatório de Custo de Produção</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React, ReactDOM e Babel -->
@@ -19,11 +19,10 @@
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; }
         
-        /* Estilos específicos para a captura do print */
         .export-container {
             padding: 40px;
             background: white;
-            width: 800px; /* Largura fixa para manter proporção no PDF */
+            width: 850px;
         }
         
         .no-print { display: block; }
@@ -31,11 +30,21 @@
             .no-print { display: none; }
         }
 
-        /* Esconder o template de exportação da tela principal */
         #export-template {
             position: absolute;
             left: -9999px;
             top: -9999px;
+        }
+
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 10px;
         }
     </style>
 </head>
@@ -54,361 +63,347 @@
 
         const App = () => {
             const [formData, setFormData] = useState({
-                bloco: '', ciclo: '', diasCiclo: '', totalTransplantado: '', totalColhido: '', totalKg: '',
+                bloco: '', ciclo: '', dataInicio: '', dataFim: '', 
+                totalTransplantado: '', totalColhido: '', totalKg: '',
+                custoVendaKg: '', // Campo preenchível pelo usuário
+                litrosDia: '',
                 custosInsumos: [{ descricao: '', valor: '' }],
                 custosOperacionais: [{ categoria: '', valor: '' }]
             });
 
             const [relatorios, setRelatorios] = useState([]);
             const exportRef = useRef(null);
-            const categoriasOperacionais = ["Enel", "Folha", "MEI", "Avulso", "Capina", "Outros"];
+            const categoriasOperacionais = ["Enel", "Folha", "MEI", "Avulso", "Capina", "Transporte", "Outros"];
 
-            const statsForm = useMemo(() => {
-                const colhido = parseFloat(formData.totalColhido) || 0;
-                const kg = parseFloat(formData.totalKg) || 0;
+            const metrics = useMemo(() => {
+                let dias = 0;
+                if (formData.dataInicio && formData.dataFim) {
+                    const start = new Date(formData.dataInicio);
+                    const end = new Date(formData.dataFim);
+                    const diff = end - start;
+                    dias = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+                }
+
                 const totalInsumos = formData.custosInsumos.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
                 const totalOperacional = formData.custosOperacionais.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
                 const totalGeral = totalInsumos + totalOperacional;
-
+                const kg = parseFloat(formData.totalKg) || 0;
+                const lpd = parseFloat(formData.litrosDia) || 0;
+                const plantas = parseFloat(formData.totalTransplantado) || 0;
+                
                 return {
-                    pesoMedio: colhido > 0 ? (kg / colhido).toFixed(3) : 0,
-                    custoPorKg: kg > 0 ? (totalGeral / kg).toFixed(2) : 0
+                    diasCiclo: dias,
+                    totalInsumos,
+                    totalOperacional,
+                    totalGeral,
+                    custoProducaoKg: kg > 0 ? (totalGeral / kg).toFixed(2) : "0.00",
+                    litrosPlanta: plantas > 0 ? (lpd / plantas).toFixed(3) : "0.000",
+                    totalAguaCiclo: (lpd * dias).toFixed(0)
                 };
             }, [formData]);
 
             const prepararExportacao = async () => {
                 const element = exportRef.current;
-                // Forçamos o elemento a ficar visível momentaneamente para o canvas capturar
                 element.style.position = "static";
                 element.style.left = "0";
-                
-                const canvas = await html2canvas(element, {
-                    scale: 3, // Aumenta a resolução para evitar letras pequenas/pixeladas
-                    useCORS: true,
-                    logging: false,
-                    backgroundColor: "#ffffff",
-                    windowWidth: element.scrollWidth,
-                    windowHeight: element.scrollHeight
-                });
-                
+                const canvas = await html2canvas(element, { scale: 3, useCORS: true, backgroundColor: "#ffffff" });
                 element.style.position = "absolute";
                 element.style.left = "-9999px";
-                
                 return canvas;
             };
 
             const exportarImagem = async () => {
-                if (relatorios.length === 0) return;
                 const canvas = await prepararExportacao();
                 const link = document.createElement('a');
-                link.download = `Relatorio_Oasis_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.png`;
-                link.href = canvas.toDataURL('image/png', 1.0);
+                link.download = `Oasis_Relatorio_${Date.now()}.png`;
+                link.href = canvas.toDataURL('image/png');
                 link.click();
             };
 
             const exportarPDF = async () => {
-                if (relatorios.length === 0) return;
                 const { jsPDF } = window.jspdf;
                 const canvas = await prepararExportacao();
                 const imgData = canvas.toDataURL('image/png');
-                
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-                
                 const imgProps = pdf.getImageProperties(imgData);
-                const canvasWidthInPdf = pdfWidth;
                 const canvasHeightInPdf = (imgProps.height * pdfWidth) / imgProps.width;
-
-                pdf.addImage(imgData, 'PNG', 0, 0, canvasWidthInPdf, canvasHeightInPdf);
-                pdf.save(`Relatorio_Oasis_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`);
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, canvasHeightInPdf);
+                pdf.save(`Oasis_Relatorio_${Date.now()}.pdf`);
             };
 
-            const handleChange = (e) => {
-                const { name, value } = e.target;
-                setFormData(prev => ({ ...prev, [name]: value }));
-            };
+            const handleChange = (e) => setFormData(p => ({ ...p, [e.target.name]: e.target.value }));
 
-            const handleCustoInsumoChange = (index, e) => {
-                const { name, value } = e.target;
-                const novos = [...formData.custosInsumos];
-                novos[index][name] = value;
-                setFormData(prev => ({ ...prev, custosInsumos: novos }));
+            const updateList = (type, index, field, value) => {
+                const list = [...formData[type]];
+                list[index][field] = value;
+                setFormData(p => ({ ...p, [type]: list }));
             };
-
-            const handleOperacionalChange = (index, e) => {
-                const { name, value } = e.target;
-                const novos = [...formData.custosOperacionais];
-                novos[index][name] = value;
-                setFormData(prev => ({ ...prev, custosOperacionais: novos }));
-            };
-
-            const adicionarInsumo = () => setFormData(prev => ({ ...prev, custosInsumos: [...prev.custosInsumos, { descricao: '', valor: '' }] }));
-            const adicionarOperacional = () => setFormData(prev => ({ ...prev, custosOperacionais: [...prev.custosOperacionais, { categoria: '', valor: '' }] }));
-            
-            const removerInsumo = (index) => setFormData(prev => ({ ...prev, custosInsumos: formData.custosInsumos.filter((_, i) => i !== index) }));
-            const removerOperacional = (index) => setFormData(prev => ({ ...prev, custosOperacionais: formData.custosOperacionais.filter((_, i) => i !== index) }));
 
             const handleSubmit = (e) => {
                 e.preventDefault();
-                const totalInsumos = formData.custosInsumos.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
-                const totalOperacional = formData.custosOperacionais.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
-                const totalKgValue = parseFloat(formData.totalKg) || 0;
-                const totalColhidoValue = parseFloat(formData.totalColhido) || 0;
-                const totalGeral = totalInsumos + totalOperacional;
-
                 const novoRelatorio = {
                     ...formData,
                     id: Date.now(),
-                    totalInsumos,
-                    totalOperacional,
-                    totalGeral,
-                    pesoMedio: totalColhidoValue > 0 ? (totalKgValue / totalColhidoValue) : 0,
-                    custoPorKg: totalKgValue > 0 ? (totalGeral / totalKgValue) : 0,
+                    ...metrics,
                     dataRegistro: new Date().toLocaleDateString('pt-BR')
                 };
-
                 setRelatorios([novoRelatorio, ...relatorios]);
                 setFormData({
-                    bloco: '', ciclo: '', diasCiclo: '', totalTransplantado: '', totalColhido: '', totalKg: '',
-                    custosInsumos: [{ descricao: '', valor: '' }],
-                    custosOperacionais: [{ categoria: '', valor: '' }]
+                    bloco: '', ciclo: '', dataInicio: '', dataFim: '', totalTransplantado: '', totalColhido: '', totalKg: '',
+                    custoVendaKg: '', litrosDia: '', custosInsumos: [{ descricao: '', valor: '' }], custosOperacionais: [{ categoria: '', valor: '' }]
                 });
             };
 
             return (
                 <div className="min-h-screen flex flex-col pb-10">
-                    {/* Template invisível para exportação com alta qualidade */}
+                    
+                    {/* EXPORT TEMPLATE */}
                     <div id="export-template" ref={exportRef} className="export-container">
-                        <div className="flex items-center justify-between border-b-4 border-emerald-600 pb-6 mb-8">
+                        <div className="flex items-center justify-between border-b-4 border-emerald-600 pb-8 mb-8">
                             <div className="flex items-center gap-6">
                                 <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-20 w-auto" />
                                 <div>
-                                    <h1 className="text-3xl font-black text-emerald-800 uppercase tracking-tighter">Fazenda Oasis</h1>
-                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em]">Relatório de Gestão e Produtividade</p>
+                                    <h1 className="text-3xl font-black text-emerald-800 uppercase">Fazenda Oasis</h1>
+                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest">Relatório de Custo de Produção</p>
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="text-xs font-black text-slate-400 uppercase">Documento Gerado em</p>
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Documento Gerado em</p>
                                 <p className="text-xl font-bold text-slate-700">{new Date().toLocaleDateString('pt-BR')}</p>
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4 mb-8">
-                            <div className="bg-emerald-600 p-6 rounded-3xl text-white">
-                                <p className="text-[10px] font-black uppercase opacity-80">Investimento Total no Período</p>
-                                <p className="text-3xl font-black">R$ {relatorios.reduce((acc, curr) => acc + curr.totalGeral, 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                            </div>
-                            <div className="bg-slate-800 p-6 rounded-3xl text-white">
-                                <p className="text-[10px] font-black uppercase opacity-80">Volume Total Produzido</p>
-                                <p className="text-3xl font-black">{relatorios.reduce((acc, curr) => acc + (parseFloat(curr.totalKg) || 0), 0).toFixed(2)} KG</p>
-                            </div>
-                        </div>
-
-                        <div className="space-y-6">
+                        <div className="space-y-8">
                             {relatorios.map(rel => (
-                                <div key={rel.id} className="border-2 border-slate-100 p-6 rounded-[2rem] bg-white">
-                                    <div className="flex justify-between items-start mb-4">
+                                <div key={rel.id} className="border-2 border-slate-100 p-8 rounded-[2.5rem] bg-white">
+                                    <div className="flex justify-between items-start mb-6 border-b pb-4">
                                         <div>
-                                            <p className="text-xs font-black text-emerald-600 uppercase tracking-widest">{rel.bloco} • {rel.dataRegistro}</p>
-                                            <h3 className="text-2xl font-black text-slate-800 uppercase">{rel.ciclo}</h3>
+                                            <p className="text-xs font-black text-emerald-600 uppercase tracking-widest">{rel.bloco}</p>
+                                            <h3 className="text-3xl font-black text-slate-800 uppercase">{rel.ciclo}</h3>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                                                Período: {new Date(rel.dataInicio).toLocaleDateString()} — {new Date(rel.dataFim).toLocaleDateString()} ({rel.diasCiclo} dias)
+                                            </p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-2xl font-black text-slate-800">R$ {rel.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                            <p className="text-xs font-bold text-slate-400 uppercase">Custo: R$ {rel.custoPorKg.toFixed(2)}/kg</p>
+                                            <p className="text-xs font-black text-slate-400 uppercase">Investimento Total</p>
+                                            <p className="text-3xl font-black text-emerald-600">R$ {parseFloat(rel.totalGeral).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                            <div className="flex gap-2 justify-end mt-1">
+                                                <p className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded uppercase">Prod: R$ {rel.custoProducaoKg}/kg</p>
+                                                {rel.custoVendaKg && (
+                                                    <p className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-1 rounded uppercase">Venda: R$ {parseFloat(rel.custoVendaKg).toFixed(2)}/kg</p>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-4 gap-4">
-                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase">Colheita</p>
-                                            <p className="text-base font-black">{rel.totalColhido} un</p>
+
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="bg-slate-50 p-4 rounded-2xl">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase mb-2">Produção Final</p>
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-bold">Peso Total: <span className="font-black">{rel.totalKg} kg</span></p>
+                                                <p className="text-sm font-bold">Colhido: <span className="font-black">{rel.totalColhido} un</span></p>
+                                                <p className="text-sm font-bold text-emerald-600">Eficiência: <span className="font-black">{Math.round((rel.totalColhido/rel.totalTransplantado)*100)}%</span></p>
+                                            </div>
                                         </div>
-                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase">Peso Total</p>
-                                            <p className="text-base font-black text-emerald-600">{rel.totalKg} kg</p>
+                                        <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
+                                            <p className="text-[9px] font-black text-blue-400 uppercase mb-2">Irrigação & Água</p>
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-bold">Diário: <span className="font-black">{rel.litrosDia} L</span></p>
+                                                <p className="text-sm font-bold">Planta: <span className="font-black">{rel.litrosPlanta} L</span></p>
+                                                <p className="text-sm font-bold text-blue-700 font-black">Ciclo: {parseFloat(rel.totalAguaCiclo).toLocaleString('pt-BR')} L</p>
+                                            </div>
                                         </div>
-                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase">Peso Médio</p>
-                                            <p className="text-base font-black">{rel.pesoMedio.toFixed(3)} kg</p>
-                                        </div>
-                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase">Eficiência</p>
-                                            <p className="text-base font-black">{Math.round((rel.totalColhido/rel.totalTransplantado)*100)}%</p>
+                                        <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100">
+                                            <p className="text-[9px] font-black text-emerald-400 uppercase mb-2">Custo Financeiro</p>
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-bold">Insumos: <span className="font-black">R$ {parseFloat(rel.totalInsumos).toFixed(2)}</span></p>
+                                                <p className="text-sm font-bold">Operacional: <span className="font-black">R$ {parseFloat(rel.totalOperacional).toFixed(2)}</span></p>
+                                                <p className="text-sm font-bold text-emerald-700 font-black tracking-tight">Custo Unitário: R$ {rel.custoProducaoKg}/kg</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                        
-                        <div className="mt-12 text-center border-t pt-6">
-                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">Fazenda Oasis - Tecnologia no Campo</p>
-                        </div>
                     </div>
 
+                    {/* INTERFACE DO USUÁRIO */}
                     <div className="h-2 w-full bg-emerald-600"></div>
-                    
                     <header className="bg-white shadow-sm border-b p-6 no-print">
-                        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div className="max-w-7xl mx-auto flex justify-between items-center">
                             <div className="flex items-center gap-4">
-                                <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-12 w-auto" />
-                                <div>
-                                    <h1 className="text-xl font-black text-emerald-800 uppercase leading-none">Fazenda Oasis</h1>
-                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Gestão de Produção</p>
-                                </div>
+                                <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-10 w-auto" />
+                                <h1 className="text-lg font-black text-emerald-800 uppercase tracking-tighter">Fazenda Oasis <span className="text-slate-300 font-light mx-2">|</span> Relatório de Custo de Produção</h1>
                             </div>
                             <div className="text-right">
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Custo Total Acumulado</p>
-                                <p className="text-2xl font-black text-emerald-600">
-                                    R$ {relatorios.reduce((acc, curr) => acc + curr.totalGeral, 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
-                                </p>
+                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Investimento Total</p>
+                                <p className="text-xl font-black text-emerald-600">R$ {relatorios.reduce((acc, curr) => acc + parseFloat(curr.totalGeral), 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                             </div>
                         </div>
                     </header>
 
-                    <main className="flex-grow max-w-7xl mx-auto w-full p-6">
-                        <div className="flex flex-col lg:flex-row gap-8">
-                            <div className="lg:w-1/2 no-print">
-                                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-6">
-                                    <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 border-b pb-4 flex items-center gap-2">
-                                        <Icon name="plus-circle" className="w-4 h-4 text-emerald-500" /> Registrar Produção
-                                    </h2>
+                    <main className="max-w-7xl mx-auto w-full p-6 grid lg:grid-cols-2 gap-8">
+                        <div className="no-print space-y-6">
+                            <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-6">
+                                <h2 className="text-sm font-black uppercase tracking-widest text-slate-400 flex items-center gap-2">
+                                    <Icon name="layout" className="w-4 h-4" /> Dados do Ciclo
+                                </h2>
 
-                                    <div className="grid grid-cols-1 gap-4">
-                                        <div>
-                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Bloco / Talhão</label>
-                                            <input required name="bloco" value={formData.bloco} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" placeholder="Ex: Bloco A" />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qual Ciclo</label>
-                                                <input required name="ciclo" value={formData.ciclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" placeholder="Ex: Alface" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Total Dias Ciclo</label>
-                                                <input type="number" required name="diasCiclo" value={formData.diasCiclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none" />
-                                            </div>
-                                        </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="col-span-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Identificação (Bloco/Estufa)</label>
+                                        <input required name="bloco" value={formData.bloco} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 ring-emerald-100" />
                                     </div>
+                                    <div className="col-span-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Variedade/Cultura</label>
+                                        <input required name="ciclo" value={formData.ciclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 ring-emerald-100" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Início Plantio</label>
+                                        <input type="date" required name="dataInicio" value={formData.dataInicio} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Data Colheita</label>
+                                        <input type="date" required name="dataFim" value={formData.dataFim} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" />
+                                    </div>
+                                </div>
 
+                                <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 space-y-4">
+                                    <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                                        <Icon name="droplets" className="w-3 h-3" /> Monitoramento Hídrico
+                                    </h3>
                                     <div className="grid grid-cols-3 gap-3">
                                         <div>
-                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qtd. Transp.</label>
-                                            <input type="number" required name="totalTransplantado" value={formData.totalTransplantado} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none" />
+                                            <label className="text-[9px] font-black text-blue-400 uppercase block mb-1">Litros/Dia</label>
+                                            <input type="number" required name="litrosDia" value={formData.litrosDia} onChange={handleChange} className="w-full p-2 text-sm rounded-lg border border-blue-200 bg-white font-bold text-blue-700" placeholder="0" />
                                         </div>
-                                        <div>
-                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qtd. Colhida (un)</label>
-                                            <input type="number" required name="totalColhido" value={formData.totalColhido} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold text-emerald-600 outline-none" />
+                                        <div className="bg-white/60 p-2 rounded-lg border border-blue-100 text-center flex flex-col justify-center">
+                                            <p className="text-[8px] font-black text-blue-400 uppercase leading-tight">Ltrs/Planta</p>
+                                            <p className="text-xs font-black text-blue-800">{metrics.litrosPlanta}</p>
                                         </div>
-                                        <div>
-                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Total KG</label>
-                                            <input type="number" step="0.01" required name="totalKg" value={formData.totalKg} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-emerald-200 bg-emerald-50 font-bold text-emerald-700 outline-none" placeholder="0.00" />
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Peso Médio Estimado</p>
-                                            <p className="text-lg font-black text-slate-700">{statsForm.pesoMedio} <span className="text-[10px]">kg/un</span></p>
-                                        </div>
-                                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Custo por KG</p>
-                                            <p className="text-lg font-black text-emerald-600">R$ {statsForm.custoPorKg}</p>
+                                        <div className="bg-white/60 p-2 rounded-lg border border-blue-100 text-center flex flex-col justify-center">
+                                            <p className="text-[8px] font-black text-blue-400 uppercase leading-tight">Total Ciclo</p>
+                                            <p className="text-xs font-black text-blue-800">{parseFloat(metrics.totalAguaCiclo).toLocaleString('pt-BR')} L</p>
                                         </div>
                                     </div>
+                                </div>
 
-                                    <div className="space-y-3 p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <label className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><Icon name="shopping-cart" className="w-3 h-3" /> Custos Insumos</label>
-                                            <button type="button" onClick={adicionarInsumo} className="text-emerald-600 p-1 hover:bg-emerald-100 rounded-lg border border-emerald-200 bg-white"><Icon name="plus" className="w-4 h-4" /></button>
+                                <div className="grid grid-cols-4 gap-3">
+                                    <div className="col-span-1">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Transpl.</label>
+                                        <input type="number" name="totalTransplantado" value={formData.totalTransplantado} onChange={handleChange} className="w-full p-2 text-xs rounded-lg border border-slate-200 bg-slate-50 font-bold" />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Colhido</label>
+                                        <input type="number" name="totalColhido" value={formData.totalColhido} onChange={handleChange} className="w-full p-2 text-xs rounded-lg border border-slate-200 bg-slate-50 font-bold" />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <label className="text-[9px] font-black text-emerald-600 uppercase block mb-1">Peso (kg)</label>
+                                        <input type="number" step="0.01" name="totalKg" value={formData.totalKg} onChange={handleChange} className="w-full p-2 text-xs rounded-lg border border-emerald-200 bg-emerald-50 font-bold text-emerald-700" />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <label className="text-[9px] font-black text-emerald-600 uppercase block mb-1">Custo $/kg</label>
+                                        <input type="number" step="0.01" name="custoVendaKg" value={formData.custoVendaKg} onChange={handleChange} className="w-full p-2 text-xs rounded-lg border border-emerald-200 bg-emerald-50 font-bold text-emerald-700" placeholder="0.00" />
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-emerald-900 rounded-2xl text-white flex justify-between items-center shadow-lg">
+                                    <div>
+                                        <p className="text-[9px] font-black uppercase opacity-60">Prod. $/KG</p>
+                                        <p className="text-2xl font-black text-emerald-400">R$ {metrics.custoProducaoKg}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[9px] font-black uppercase opacity-60">Tempo Ciclo</p>
+                                        <p className="text-2xl font-black">{metrics.diasCiclo} Dias</p>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><Icon name="shopping-bag" className="w-3 h-3" /> Insumos</h3>
+                                            <button type="button" onClick={() => setFormData(p => ({...p, custosInsumos: [...p.custosInsumos, {descricao: '', valor: ''}]}))} className="bg-white p-1 rounded-md border shadow-sm"><Icon name="plus" className="w-3 h-3 text-emerald-600" /></button>
                                         </div>
                                         {formData.custosInsumos.map((c, i) => (
-                                            <div key={i} className="flex gap-2">
-                                                <input placeholder="Descrição" name="descricao" value={c.descricao} onChange={(e) => handleCustoInsumoChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white" />
-                                                <input type="number" placeholder="R$" name="valor" value={c.valor} onChange={(e) => handleCustoInsumoChange(i, e)} className="w-24 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white" />
-                                                {formData.custosInsumos.length > 1 && <button type="button" onClick={() => removerInsumo(i)} className="text-rose-400"><Icon name="trash-2" className="w-4 h-4" /></button>}
+                                            <div key={i} className="flex gap-2 mb-2">
+                                                <input placeholder="Ex: Fertilizante" value={c.descricao} onChange={(e) => updateList('custosInsumos', i, 'descricao', e.target.value)} className="flex-grow px-3 py-1.5 text-xs rounded-lg border bg-white" />
+                                                <input type="number" placeholder="R$" value={c.valor} onChange={(e) => updateList('custosInsumos', i, 'valor', e.target.value)} className="w-20 px-3 py-1.5 text-xs rounded-lg border font-bold" />
                                             </div>
                                         ))}
                                     </div>
 
-                                    <div className="space-y-3 p-4 bg-blue-50/30 rounded-2xl border border-blue-100">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <label className="text-[10px] font-black text-blue-700 uppercase tracking-widest flex items-center gap-2"><Icon name="wrench" className="w-3 h-3" /> Custos Operacionais</label>
-                                            <button type="button" onClick={adicionarOperacional} className="text-blue-600 p-1 hover:bg-blue-100 rounded-lg border border-blue-200 bg-white"><Icon name="plus" className="w-4 h-4" /></button>
+                                    <div className="p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-2"><Icon name="users" className="w-3 h-3" /> Operacional</h3>
+                                            <button type="button" onClick={() => setFormData(p => ({...p, custosOperacionais: [...p.custosOperacionais, {categoria: '', valor: ''}]}))} className="bg-white p-1 rounded-md border shadow-sm"><Icon name="plus" className="w-3 h-3 text-emerald-600" /></button>
                                         </div>
                                         {formData.custosOperacionais.map((o, i) => (
-                                            <div key={i} className="flex gap-2">
-                                                <select name="categoria" value={o.categoria} onChange={(e) => handleOperacionalChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white outline-none">
+                                            <div key={i} className="flex gap-2 mb-2">
+                                                <select value={o.categoria} onChange={(e) => updateList('custosOperacionais', i, 'categoria', e.target.value)} className="flex-grow px-3 py-1.5 text-xs rounded-lg border bg-white outline-none">
                                                     <option value="">Categoria...</option>
                                                     {categoriasOperacionais.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                                 </select>
-                                                <input type="number" placeholder="R$" name="valor" value={o.valor} onChange={(e) => handleOperacionalChange(i, e)} className="w-24 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white" />
-                                                {formData.custosOperacionais.length > 1 && <button type="button" onClick={() => removerOperacional(i)} className="text-rose-400"><Icon name="trash-2" className="w-4 h-4" /></button>}
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    <button type="submit" className="w-full bg-emerald-600 text-white font-black py-4 rounded-2xl hover:bg-emerald-700 uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
-                                        <Icon name="save" className="w-4 h-4" /> Finalizar Lançamento
-                                    </button>
-                                </form>
-                            </div>
-
-                            <div className="lg:w-1/2">
-                                <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden sticky top-6">
-                                    <div className="p-6 bg-slate-50 border-b flex flex-col sm:flex-row items-center justify-between gap-4">
-                                        <div className="flex items-center gap-2">
-                                            <Icon name="clipboard-list" className="w-5 h-5 text-emerald-600" />
-                                            <h2 className="text-sm font-black uppercase text-slate-700">Histórico de Produção</h2>
-                                        </div>
-                                        <div className="flex gap-2 no-print">
-                                            <button onClick={exportarImagem} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase text-slate-500 hover:bg-slate-100 transition-all shadow-sm">
-                                                <Icon name="image" className="w-3.5 h-3.5" /> Salvar PNG
-                                            </button>
-                                            <button onClick={exportarPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 border border-emerald-700 rounded-lg text-[9px] font-black uppercase text-white hover:bg-emerald-700 transition-all shadow-sm">
-                                                <Icon name="file-text" className="w-3.5 h-3.5" /> Baixar PDF
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div className="divide-y max-h-[70vh] overflow-y-auto bg-white">
-                                        {relatorios.length === 0 ? (
-                                            <div className="p-20 text-center opacity-30">
-                                                <Icon name="leaf" className="w-12 h-12 mx-auto mb-4" />
-                                                <p className="text-xs font-bold uppercase tracking-widest">Aguardando Registros</p>
-                                            </div>
-                                        ) : relatorios.map(rel => (
-                                            <div key={rel.id} className="p-6 hover:bg-slate-50 transition-colors">
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div>
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{rel.bloco} • {rel.dataRegistro}</p>
-                                                        <h3 className="font-black text-slate-800 uppercase text-base">{rel.ciclo}</h3>
-                                                        <div className="flex gap-2 mt-1">
-                                                            <span className="text-[10px] font-bold text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">{rel.diasCiclo} dias</span>
-                                                            <span className="text-[10px] font-bold text-emerald-600 uppercase bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">{rel.totalKg} KG</span>
-                                                        </div>
-                                                    </div>
-                                                    <div className="text-right">
-                                                        <p className="font-black text-emerald-600 text-lg">R$ {rel.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                                        <p className="text-[10px] font-black text-slate-400 uppercase">R$ {rel.custoPorKg.toFixed(2)} / kg</p>
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="grid grid-cols-3 gap-2 text-[9px] font-bold mb-4">
-                                                    <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100 text-emerald-700">Insumos: R$ {rel.totalInsumos.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
-                                                    <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 text-blue-700">Operac: R$ {rel.totalOperacional.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
-                                                    <div className="bg-slate-100 p-2 rounded-lg border border-slate-200 text-slate-700">Médio: {rel.pesoMedio.toFixed(3)}kg</div>
-                                                </div>
-
-                                                <div className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400">
-                                                    <span>Eficiência:</span>
-                                                    <div className="flex-grow bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                                                        <div className="bg-emerald-500 h-full" style={{width: `${Math.min((rel.totalColhido/rel.totalTransplantado)*100, 100)}%`}}></div>
-                                                    </div>
-                                                    <span className="text-slate-700">{Math.round((rel.totalColhido/rel.totalTransplantado)*100)}% colhido</span>
-                                                </div>
+                                                <input type="number" placeholder="R$" value={o.valor} onChange={(e) => updateList('custosOperacionais', i, 'valor', e.target.value)} className="w-20 px-3 py-1.5 text-xs rounded-lg border font-bold" />
                                             </div>
                                         ))}
                                     </div>
                                 </div>
+
+                                <button type="submit" className="w-full bg-emerald-600 text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all">
+                                    Salvar Relatório de Produção
+                                </button>
+                            </form>
+                        </div>
+
+                        {/* COLUNA DIREITA: HISTÓRICO */}
+                        <div className="bg-white rounded-3xl shadow-xl border border-slate-100 flex flex-col overflow-hidden">
+                            <div className="p-6 bg-slate-50 border-b flex justify-between items-center no-print">
+                                <h2 className="text-sm font-black uppercase text-slate-700 flex items-center gap-2">
+                                    <Icon name="history" className="w-4 h-4" /> Registros de Custo
+                                </h2>
+                                <div className="flex gap-2">
+                                    <button onClick={exportarImagem} className="px-3 py-1.5 bg-white border rounded-lg text-[9px] font-black uppercase text-slate-500 hover:bg-slate-100 transition-all">PNG</button>
+                                    <button onClick={exportarPDF} className="px-3 py-1.5 bg-emerald-600 border border-emerald-700 rounded-lg text-[9px] font-black uppercase text-white hover:bg-emerald-700 transition-all">PDF</button>
+                                </div>
+                            </div>
+                            <div className="flex-grow overflow-y-auto custom-scroll max-h-[85vh] divide-y">
+                                {relatorios.length === 0 ? (
+                                    <div className="p-20 text-center opacity-20">
+                                        <Icon name="sun" className="w-12 h-12 mx-auto mb-4" />
+                                        <p className="text-[10px] font-black uppercase">Aguardando novo ciclo...</p>
+                                    </div>
+                                ) : relatorios.map(rel => (
+                                    <div key={rel.id} className="p-6 hover:bg-slate-50/50 transition-colors">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="text-[9px] font-black text-emerald-600 uppercase mb-1">{rel.bloco}</p>
+                                                <h3 className="font-black text-slate-800 text-lg uppercase leading-tight">{rel.ciclo}</h3>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Duração: {rel.diasCiclo} dias</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xl font-black text-emerald-600 uppercase">R$ {parseFloat(rel.totalGeral).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                                <div className="flex flex-col items-end gap-1 mt-1">
+                                                    <p className="text-[9px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded uppercase">Prod: R$ {rel.custoProducaoKg}/kg</p>
+                                                    {rel.custoVendaKg && (
+                                                        <p className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded uppercase">Venda: R$ {parseFloat(rel.custoVendaKg).toFixed(2)}/kg</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="mt-4 grid grid-cols-2 gap-3">
+                                            <div className="bg-slate-100 p-2 rounded-xl text-center">
+                                                <p className="text-[8px] font-black text-slate-400 uppercase leading-tight">Peso & Unid</p>
+                                                <p className="text-[10px] font-black text-slate-700">{rel.totalKg}kg | {rel.totalColhido}un</p>
+                                            </div>
+                                            <div className="bg-blue-50 p-2 rounded-xl text-center border border-blue-100">
+                                                <p className="text-[8px] font-black text-blue-400 uppercase leading-tight">Consumo Hídrico</p>
+                                                <p className="text-[10px] font-black text-blue-700">{rel.litrosPlanta} L/Planta</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </main>
