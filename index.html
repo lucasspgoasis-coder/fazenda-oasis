@@ -69,6 +69,7 @@
                 litrosDia: '',
                 litrosPlantaManual: '',
                 volumeTotalL: '',
+                caixas: '',
                 custosInsumos: [{ descricao: '', valor: '' }],
                 custosOperacionais: [{ categoria: '', valor: '' }]
             });
@@ -90,12 +91,17 @@
                 const totalOperacional = formData.custosOperacionais.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
                 const totalGeral = totalInsumos + totalOperacional;
                 const kg = parseFloat(formData.totalKg) || 0;
+                const colhido = parseFloat(formData.totalColhido) || 0;
+
+                // Cálculo do peso médio em gramas
+                const pesoMedio = (kg > 0 && colhido > 0) ? ((kg / colhido) * 1000).toFixed(0) : "0";
                 
                 return {
                     diasCiclo: dias,
                     totalInsumos,
                     totalOperacional,
                     totalGeral,
+                    pesoMedio,
                     custoProducaoKg: kg > 0 ? (totalGeral / kg).toFixed(2) : "0.00"
                 };
             }, [formData]);
@@ -151,7 +157,7 @@
                 setRelatorios([novoRelatorio, ...relatorios]);
                 setFormData({
                     bloco: '', ciclo: '', numCiclo: '', dataInicio: '', dataFim: '', totalTransplantado: '', totalColhido: '', totalKg: '',
-                    custoVendaKg: '', litrosDia: '', litrosPlantaManual: '', volumeTotalL: '', custosInsumos: [{ descricao: '', valor: '' }], custosOperacionais: [{ categoria: '', valor: '' }]
+                    custoVendaKg: '', litrosDia: '', litrosPlantaManual: '', volumeTotalL: '', caixas: '', custosInsumos: [{ descricao: '', valor: '' }], custosOperacionais: [{ categoria: '', valor: '' }]
                 });
             };
 
@@ -202,7 +208,8 @@
                                             <div className="space-y-1">
                                                 <p className="text-sm font-bold">Peso Total: <span className="font-black">{rel.totalKg} kg</span></p>
                                                 <p className="text-sm font-bold">Colhido: <span className="font-black">{rel.totalColhido} un</span></p>
-                                                <p className="text-sm font-bold text-emerald-600">Eficiência: <span className="font-black">{Math.round((rel.totalColhido/rel.totalTransplantado)*100)}%</span></p>
+                                                <p className="text-sm font-bold text-blue-600">Peso Médio: <span className="font-black">{rel.pesoMedio} g</span></p>
+                                                <p className="text-sm font-bold text-slate-600">Caixas: <span className="font-black">{rel.caixas}</span></p>
                                             </div>
                                         </div>
                                         <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
@@ -227,7 +234,7 @@
                         </div>
                     </div>
 
-                    {/* INTERFACE DO USUÁRIO - CABEÇALHO VERDE */}
+                    {/* INTERFACE DO USUÁRIO */}
                     <header className="bg-emerald-700 shadow-md p-6 no-print">
                         <div className="max-w-7xl mx-auto flex justify-between items-center">
                             <div className="flex items-center gap-4">
@@ -295,23 +302,37 @@
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-4 gap-3">
-                                    <div className="col-span-1">
-                                        <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Transpl.</label>
-                                        <input type="number" name="totalTransplantado" value={formData.totalTransplantado} onChange={handleChange} className="w-full p-2 text-xs rounded-lg border border-slate-200 bg-slate-50 font-bold" />
+                                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+                                    <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-2">
+                                        <Icon name="archive" className="w-3 h-3" /> Resultados da Colheita
+                                    </h3>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Peso (kg)</label>
+                                            <input type="number" step="0.01" required name="totalKg" value={formData.totalKg} onChange={handleChange} className="w-full p-2 text-sm rounded-lg border border-slate-200 bg-white font-bold" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Unidades</label>
+                                            <input type="number" required name="totalColhido" value={formData.totalColhido} onChange={handleChange} className="w-full p-2 text-sm rounded-lg border border-slate-200 bg-white font-bold" />
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Caixas</label>
+                                            <input type="number" required name="caixas" value={formData.caixas} onChange={handleChange} className="w-full p-2 text-sm rounded-lg border border-slate-200 bg-white font-bold text-emerald-600" placeholder="0" />
+                                        </div>
+                                        <div className="col-span-1">
+                                            <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Transpl.</label>
+                                            <input type="number" name="totalTransplantado" value={formData.totalTransplantado} onChange={handleChange} className="w-full p-2 text-xs rounded-lg border border-slate-200 bg-white" />
+                                        </div>
+                                        <div className="col-span-2 bg-blue-50 p-2 rounded-lg border border-blue-100 text-center flex flex-col justify-center">
+                                            <p className="text-[8px] font-black text-blue-400 uppercase leading-tight">Peso Médio Estimado</p>
+                                            <p className="text-sm font-black text-blue-800">{metrics.pesoMedio} gramas</p>
+                                        </div>
                                     </div>
-                                    <div className="col-span-1">
-                                        <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Colhido</label>
-                                        <input type="number" name="totalColhido" value={formData.totalColhido} onChange={handleChange} className="w-full p-2 text-xs rounded-lg border border-slate-200 bg-slate-50 font-bold" />
-                                    </div>
-                                    <div className="col-span-1">
-                                        <label className="text-[9px] font-black text-emerald-600 uppercase block mb-1">Peso (kg)</label>
-                                        <input type="number" step="0.01" name="totalKg" value={formData.totalKg} onChange={handleChange} className="w-full p-2 text-xs rounded-lg border border-emerald-200 bg-emerald-50 font-bold text-emerald-700" />
-                                    </div>
-                                    <div className="col-span-1">
-                                        <label className="text-[9px] font-black text-emerald-600 uppercase block mb-1">Custo $/kg</label>
-                                        <input type="number" step="0.01" name="custoVendaKg" value={formData.custoVendaKg} onChange={handleChange} className="w-full p-2 text-xs rounded-lg border border-emerald-200 bg-emerald-50 font-bold text-emerald-700" placeholder="0.00" />
-                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1">
+                                    <label className="text-[9px] font-black text-emerald-600 uppercase block mb-1">Preço Venda sugerido (R$/kg)</label>
+                                    <input type="number" step="0.01" name="custoVendaKg" value={formData.custoVendaKg} onChange={handleChange} className="w-full p-3 text-sm rounded-xl border border-emerald-200 bg-emerald-50 font-bold text-emerald-700 shadow-sm" placeholder="0.00" />
                                 </div>
 
                                 <div className="p-4 bg-emerald-900 rounded-2xl text-white flex justify-between items-center shadow-lg">
@@ -385,7 +406,7 @@
                                             <div>
                                                 <div className="flex items-center gap-2 mb-1">
                                                     <span className="text-[9px] font-black text-emerald-600 uppercase bg-emerald-50 px-1.5 py-0.5 rounded">{rel.bloco}</span>
-                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Reg: {rel.dataRegistro} às {rel.horaRegistro}</span>
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Reg: {rel.dataRegistro}</span>
                                                 </div>
                                                 <h3 className="font-black text-slate-800 text-lg uppercase leading-tight">
                                                     {rel.ciclo} <span className="text-emerald-500">#{rel.numCiclo}</span>
@@ -402,12 +423,14 @@
                                         
                                         <div className="mt-4 grid grid-cols-2 gap-3">
                                             <div className="bg-slate-100 p-2 rounded-xl text-center">
-                                                <p className="text-[8px] font-black text-slate-400 uppercase leading-tight">Peso & Unid</p>
-                                                <p className="text-[10px] font-black text-slate-700">{rel.totalKg}kg | {rel.totalColhido}un</p>
+                                                <p className="text-[8px] font-black text-slate-400 uppercase leading-tight">Produção</p>
+                                                <p className="text-[10px] font-black text-slate-700">{rel.totalKg}kg | {rel.totalColhido}un | {rel.caixas}cx</p>
+                                                <p className="text-[8px] font-bold text-blue-600 uppercase mt-1">Peso Médio: {rel.pesoMedio}g</p>
                                             </div>
                                             <div className="bg-blue-50 p-2 rounded-xl text-center border border-blue-100">
-                                                <p className="text-[8px] font-black text-blue-400 uppercase leading-tight">Irrigação (Volume)</p>
+                                                <p className="text-[8px] font-black text-blue-400 uppercase leading-tight">Hídrico</p>
                                                 <p className="text-[10px] font-black text-blue-700">{rel.volumeTotalL} L Total</p>
+                                                <p className="text-[8px] font-bold text-blue-500 uppercase mt-1">{rel.litrosPlantaManual} L/Planta</p>
                                             </div>
                                         </div>
                                     </div>
