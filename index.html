@@ -10,41 +10,36 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Bibliotecas de Exportação -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
-        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        body { font-family: 'Inter', sans-serif; }
         
-        /* Área de exportação otimizada */
-        #export-area { 
-            position: absolute; 
-            left: -9999px; 
-            top: -9999px; 
-            width: 1000px;
-            background: white; 
-            color: #1e293b;
+        /* Estilos específicos para a captura do print */
+        .export-container {
+            padding: 40px;
+            background: white;
+            width: 800px; /* Largura fixa para manter proporção no PDF */
+        }
+        
+        .no-print { display: block; }
+        @media print {
+            .no-print { display: none; }
         }
 
-        .custom-scroll::-webkit-scrollbar { width: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        
-        .page-break-inside-avoid { page-break-inside: avoid; }
-        
-        input[type="date"] { cursor: pointer; }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        /* Esconder o template de exportação da tela principal */
+        #export-template {
+            position: absolute;
+            left: -9999px;
+            top: -9999px;
         }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="bg-slate-100">
     <div id="root"></div>
 
     <script type="text/babel">
@@ -53,56 +48,81 @@
         const Icon = ({ name, className }) => {
             useEffect(() => {
                 if (window.lucide) window.lucide.createIcons();
-            }, [name]);
+            }, []);
             return <i data-lucide={name} className={className}></i>;
         };
 
         const App = () => {
-            const exportRef = useRef();
-            const [editingId, setEditingId] = useState(null);
-            const [isExporting, setIsExporting] = useState(false);
-            
-            const initialFormState = {
-                bloco: '', ciclo: '', dataInicio: '', dataTermino: '', diasCiclo: 0, 
-                totalTransplantado: '', totalColhido: '',
+            const [formData, setFormData] = useState({
+                bloco: '', ciclo: '', diasCiclo: '', totalTransplantado: '', totalColhido: '', totalKg: '',
                 custosInsumos: [{ descricao: '', valor: '' }],
                 custosOperacionais: [{ categoria: '', valor: '' }]
-            };
-
-            const [formData, setFormData] = useState(initialFormState);
-            const [relatorios, setRelatorios] = useState(() => {
-                const saved = localStorage.getItem('oasis_data');
-                return saved ? JSON.parse(saved) : [];
             });
 
-            const categoriasOperacionais = ["Enel", "Folha", "MEI", "Avulso", "Capina", "Transporte", "Manutenção", "Outros"];
+            const [relatorios, setRelatorios] = useState([]);
+            const exportRef = useRef(null);
+            const categoriasOperacionais = ["Enel", "Folha", "MEI", "Avulso", "Capina", "Outros"];
 
-            // Persistência Local
-            useEffect(() => {
-                localStorage.setItem('oasis_data', JSON.stringify(relatorios));
-            }, [relatorios]);
+            const statsForm = useMemo(() => {
+                const colhido = parseFloat(formData.totalColhido) || 0;
+                const kg = parseFloat(formData.totalKg) || 0;
+                const totalInsumos = formData.custosInsumos.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+                const totalOperacional = formData.custosOperacionais.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+                const totalGeral = totalInsumos + totalOperacional;
 
-            // Cálculo de Custos do Formulário
-            const somaInsumosForm = useMemo(() => {
-                return formData.custosInsumos.reduce((acc, curr) => acc + (parseFloat(String(curr.valor).replace(',', '.')) || 0), 0);
-            }, [formData.custosInsumos]);
+                return {
+                    pesoMedio: colhido > 0 ? (kg / colhido).toFixed(3) : 0,
+                    custoPorKg: kg > 0 ? (totalGeral / kg).toFixed(2) : 0
+                };
+            }, [formData]);
 
-            const somaOperacionalForm = useMemo(() => {
-                return formData.custosOperacionais.reduce((acc, curr) => acc + (parseFloat(String(curr.valor).replace(',', '.')) || 0), 0);
-            }, [formData.custosOperacionais]);
+            const prepararExportacao = async () => {
+                const element = exportRef.current;
+                // Forçamos o elemento a ficar visível momentaneamente para o canvas capturar
+                element.style.position = "static";
+                element.style.left = "0";
+                
+                const canvas = await html2canvas(element, {
+                    scale: 3, // Aumenta a resolução para evitar letras pequenas/pixeladas
+                    useCORS: true,
+                    logging: false,
+                    backgroundColor: "#ffffff",
+                    windowWidth: element.scrollWidth,
+                    windowHeight: element.scrollHeight
+                });
+                
+                element.style.position = "absolute";
+                element.style.left = "-9999px";
+                
+                return canvas;
+            };
 
-            const totalGeralForm = somaInsumosForm + somaOperacionalForm;
+            const exportarImagem = async () => {
+                if (relatorios.length === 0) return;
+                const canvas = await prepararExportacao();
+                const link = document.createElement('a');
+                link.download = `Relatorio_Oasis_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.png`;
+                link.href = canvas.toDataURL('image/png', 1.0);
+                link.click();
+            };
 
-            // Cálculo Automático de Dias
-            useEffect(() => {
-                if (formData.dataInicio && formData.dataTermino) {
-                    const inicio = new Date(formData.dataInicio);
-                    const fim = new Date(formData.dataTermino);
-                    const diffTime = fim - inicio;
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    setFormData(prev => ({ ...prev, diasCiclo: diffDays > 0 ? diffDays : 0 }));
-                }
-            }, [formData.dataInicio, formData.dataTermino]);
+            const exportarPDF = async () => {
+                if (relatorios.length === 0) return;
+                const { jsPDF } = window.jspdf;
+                const canvas = await prepararExportacao();
+                const imgData = canvas.toDataURL('image/png');
+                
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                
+                const imgProps = pdf.getImageProperties(imgData);
+                const canvasWidthInPdf = pdfWidth;
+                const canvasHeightInPdf = (imgProps.height * pdfWidth) / imgProps.width;
+
+                pdf.addImage(imgData, 'PNG', 0, 0, canvasWidthInPdf, canvasHeightInPdf);
+                pdf.save(`Relatorio_Oasis_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`);
+            };
 
             const handleChange = (e) => {
                 const { name, value } = e.target;
@@ -125,341 +145,265 @@
 
             const adicionarInsumo = () => setFormData(prev => ({ ...prev, custosInsumos: [...prev.custosInsumos, { descricao: '', valor: '' }] }));
             const adicionarOperacional = () => setFormData(prev => ({ ...prev, custosOperacionais: [...prev.custosOperacionais, { categoria: '', valor: '' }] }));
+            
             const removerInsumo = (index) => setFormData(prev => ({ ...prev, custosInsumos: formData.custosInsumos.filter((_, i) => i !== index) }));
             const removerOperacional = (index) => setFormData(prev => ({ ...prev, custosOperacionais: formData.custosOperacionais.filter((_, i) => i !== index) }));
 
             const handleSubmit = (e) => {
                 e.preventDefault();
-                const novoDados = {
+                const totalInsumos = formData.custosInsumos.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+                const totalOperacional = formData.custosOperacionais.reduce((acc, curr) => acc + (parseFloat(curr.valor) || 0), 0);
+                const totalKgValue = parseFloat(formData.totalKg) || 0;
+                const totalColhidoValue = parseFloat(formData.totalColhido) || 0;
+                const totalGeral = totalInsumos + totalOperacional;
+
+                const novoRelatorio = {
                     ...formData,
-                    id: editingId || Date.now(),
-                    totalInsumos: somaInsumosForm,
-                    totalOperacional: somaOperacionalForm,
-                    totalGeral: totalGeralForm,
+                    id: Date.now(),
+                    totalInsumos,
+                    totalOperacional,
+                    totalGeral,
+                    pesoMedio: totalColhidoValue > 0 ? (totalKgValue / totalColhidoValue) : 0,
+                    custoPorKg: totalKgValue > 0 ? (totalGeral / totalKgValue) : 0,
                     dataRegistro: new Date().toLocaleDateString('pt-BR')
                 };
 
-                if (editingId) {
-                    setRelatorios(relatorios.map(r => r.id === editingId ? novoDados : r));
-                    setEditingId(null);
-                } else {
-                    setRelatorios([novoDados, ...relatorios]);
-                }
-                
-                setFormData(initialFormState);
-            };
-
-            const handleEdit = (rel) => {
-                setFormData(rel);
-                setEditingId(rel.id);
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            };
-
-            const handleDelete = (id) => {
-                if(confirm("Deseja realmente excluir este registro?")) {
-                    setRelatorios(relatorios.filter(r => r.id !== id));
-                }
-            };
-
-            const handleCancelEdit = () => {
-                setFormData(initialFormState);
-                setEditingId(null);
-            };
-
-            const exportar = async (formato) => {
-                if (relatorios.length === 0) return;
-                setIsExporting(true);
-                try {
-                    const element = exportRef.current;
-                    const canvas = await html2canvas(element, { 
-                        scale: 2.5, 
-                        useCORS: true, 
-                        backgroundColor: "#ffffff",
-                        windowWidth: 1000
-                    });
-                    const imgData = canvas.toDataURL('image/jpeg', 0.95);
-                    
-                    if (formato === 'jpg') {
-                        const link = document.createElement('a');
-                        link.download = `relatorio-oasis-${Date.now()}.jpg`;
-                        link.href = imgData;
-                        link.click();
-                    } else {
-                        const { jsPDF } = window.jspdf;
-                        const pdf = new jsPDF('p', 'mm', 'a4');
-                        const pdfWidth = pdf.internal.pageSize.getWidth();
-                        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-                        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-                        pdf.save(`relatorio-oasis-${Date.now()}.pdf`);
-                    }
-                } catch (err) {
-                    console.error("Erro na exportação:", err);
-                } finally {
-                    setIsExporting(false);
-                }
+                setRelatorios([novoRelatorio, ...relatorios]);
+                setFormData({
+                    bloco: '', ciclo: '', diasCiclo: '', totalTransplantado: '', totalColhido: '', totalKg: '',
+                    custosInsumos: [{ descricao: '', valor: '' }],
+                    custosOperacionais: [{ categoria: '', valor: '' }]
+                });
             };
 
             return (
                 <div className="min-h-screen flex flex-col pb-10">
-                    <div className="h-2 w-full bg-emerald-600 sticky top-0 z-[60]"></div>
-
-                    {/* ÁREA DE EXPORTAÇÃO (DESIGN PARA IMPRESSÃO) */}
-                    <div id="export-area" ref={exportRef} className="p-12">
-                        <div className="flex items-center justify-between border-b-4 border-emerald-600 pb-8 mb-10">
+                    {/* Template invisível para exportação com alta qualidade */}
+                    <div id="export-template" ref={exportRef} className="export-container">
+                        <div className="flex items-center justify-between border-b-4 border-emerald-600 pb-6 mb-8">
                             <div className="flex items-center gap-6">
-                                <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-24 w-auto" />
+                                <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-20 w-auto" />
                                 <div>
-                                    <h1 className="text-4xl font-black text-emerald-800 uppercase leading-none">Fazenda Oasis</h1>
-                                    <p className="text-slate-500 text-lg font-bold uppercase tracking-[0.2em] mt-2">Relatório Consolidado de Produção</p>
+                                    <h1 className="text-3xl font-black text-emerald-800 uppercase tracking-tighter">Fazenda Oasis</h1>
+                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.2em]">Relatório de Gestão e Produtividade</p>
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="text-sm font-bold text-slate-400 uppercase">Documento Gerado em:</p>
-                                <p className="text-lg font-black text-slate-700">{new Date().toLocaleDateString('pt-BR')}</p>
+                                <p className="text-xs font-black text-slate-400 uppercase">Documento Gerado em</p>
+                                <p className="text-xl font-bold text-slate-700">{new Date().toLocaleDateString('pt-BR')}</p>
                             </div>
                         </div>
 
-                        <div className="space-y-10">
+                        <div className="grid grid-cols-2 gap-4 mb-8">
+                            <div className="bg-emerald-600 p-6 rounded-3xl text-white">
+                                <p className="text-[10px] font-black uppercase opacity-80">Investimento Total no Período</p>
+                                <p className="text-3xl font-black">R$ {relatorios.reduce((acc, curr) => acc + curr.totalGeral, 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                            </div>
+                            <div className="bg-slate-800 p-6 rounded-3xl text-white">
+                                <p className="text-[10px] font-black uppercase opacity-80">Volume Total Produzido</p>
+                                <p className="text-3xl font-black">{relatorios.reduce((acc, curr) => acc + (parseFloat(curr.totalKg) || 0), 0).toFixed(2)} KG</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-6">
                             {relatorios.map(rel => (
-                                <div key={rel.id} className="border-2 border-slate-200 rounded-[2rem] p-8 bg-white page-break-inside-avoid shadow-sm">
-                                    <div className="flex justify-between items-end mb-8 border-b-2 border-slate-100 pb-6">
+                                <div key={rel.id} className="border-2 border-slate-100 p-6 rounded-[2rem] bg-white">
+                                    <div className="flex justify-between items-start mb-4">
                                         <div>
-                                            <div className="bg-emerald-600 text-white px-4 py-1 rounded-full text-sm font-black uppercase inline-block mb-3">
-                                                Lote: {rel.bloco}
-                                            </div>
-                                            <h2 className="text-3xl font-black text-slate-800 uppercase">{rel.ciclo}</h2>
-                                            <p className="text-lg font-bold text-slate-500 mt-1">
-                                                {new Date(rel.dataInicio).toLocaleDateString('pt-BR')} até {new Date(rel.dataTermino).toLocaleDateString('pt-BR')} ({rel.diasCiclo} dias)
-                                            </p>
+                                            <p className="text-xs font-black text-emerald-600 uppercase tracking-widest">{rel.bloco} • {rel.dataRegistro}</p>
+                                            <h3 className="text-2xl font-black text-slate-800 uppercase">{rel.ciclo}</h3>
                                         </div>
                                         <div className="text-right">
-                                            <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Custo do Lote</p>
-                                            <p className="text-5xl font-black text-emerald-600">R$ {rel.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                            <p className="text-2xl font-black text-slate-800">R$ {rel.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                            <p className="text-xs font-bold text-slate-400 uppercase">Custo: R$ {rel.custoPorKg.toFixed(2)}/kg</p>
                                         </div>
                                     </div>
-
-                                    <div className="grid grid-cols-2 gap-12">
-                                        <div className="space-y-6">
-                                            <div className="flex justify-between items-center border-b-2 border-emerald-500/20 pb-2">
-                                                <h4 className="font-black text-emerald-700 uppercase text-lg">Insumos</h4>
-                                                <span className="font-black text-emerald-600">R$ {rel.totalInsumos.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                                            </div>
-                                            <div className="space-y-2">
-                                                {rel.custosInsumos.map((ins, idx) => (
-                                                    <div key={idx} className="flex justify-between text-base border-b border-slate-50 pb-1">
-                                                        <span className="text-slate-600">{ins.descricao || 'Item'}</span>
-                                                        <span className="font-bold text-slate-800">R$ {parseFloat(ins.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                    <div className="grid grid-cols-4 gap-4">
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase">Colheita</p>
+                                            <p className="text-base font-black">{rel.totalColhido} un</p>
                                         </div>
-
-                                        <div className="space-y-6">
-                                            <div className="flex justify-between items-center border-b-2 border-blue-500/20 pb-2">
-                                                <h4 className="font-black text-blue-700 uppercase text-lg">Operacional</h4>
-                                                <span className="font-black text-blue-600">R$ {rel.totalOperacional.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                                            </div>
-                                            <div className="space-y-2">
-                                                {rel.custosOperacionais.map((op, idx) => (
-                                                    <div key={idx} className="flex justify-between text-base border-b border-slate-50 pb-1">
-                                                        <span className="text-slate-600">{op.categoria || 'Outros'}</span>
-                                                        <span className="font-bold text-slate-800">R$ {parseFloat(op.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase">Peso Total</p>
+                                            <p className="text-base font-black text-emerald-600">{rel.totalKg} kg</p>
                                         </div>
-                                    </div>
-
-                                    <div className="mt-8 bg-slate-50 rounded-2xl p-6 grid grid-cols-2 gap-4">
-                                        <div className="text-center border-r border-slate-200">
-                                            <p className="text-xs font-black text-slate-400 uppercase">Transplantado</p>
-                                            <p className="text-2xl font-black text-slate-700">{rel.totalTransplantado} un.</p>
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase">Peso Médio</p>
+                                            <p className="text-base font-black">{rel.pesoMedio.toFixed(3)} kg</p>
                                         </div>
-                                        <div className="text-center">
-                                            <p className="text-xs font-black text-slate-400 uppercase">Colhido</p>
-                                            <p className="text-2xl font-black text-emerald-600">{rel.totalColhido} un.</p>
+                                        <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase">Eficiência</p>
+                                            <p className="text-base font-black">{Math.round((rel.totalColhido/rel.totalTransplantado)*100)}%</p>
                                         </div>
                                     </div>
                                 </div>
                             ))}
                         </div>
+                        
+                        <div className="mt-12 text-center border-t pt-6">
+                            <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.3em]">Fazenda Oasis - Tecnologia no Campo</p>
+                        </div>
                     </div>
 
-                    {/* INTERFACE DO USUÁRIO */}
-                    <header className="bg-white/80 backdrop-blur-md shadow-sm border-b p-4 md:p-6 sticky top-2 z-50 mx-4 mt-2 rounded-2xl">
+                    <div className="h-2 w-full bg-emerald-600"></div>
+                    
+                    <header className="bg-white shadow-sm border-b p-6 no-print">
                         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-4">
-                                <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-10 md:h-12 w-auto" />
+                                <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-12 w-auto" />
                                 <div>
-                                    <h1 className="text-lg md:text-xl font-black text-emerald-800 uppercase leading-none tracking-tight">Fazenda Oasis</h1>
-                                    <p className="text-slate-400 text-[9px] md:text-[10px] font-bold uppercase tracking-widest mt-1">Gestão de Produção v2.1</p>
+                                    <h1 className="text-xl font-black text-emerald-800 uppercase leading-none">Fazenda Oasis</h1>
+                                    <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mt-1">Gestão de Produção</p>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-4 md:gap-6">
-                                <div className="text-right hidden sm:block border-r pr-6 border-slate-100">
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total Geral</p>
-                                    <p className="text-xl md:text-2xl font-black text-emerald-600">R$ {relatorios.reduce((acc, curr) => acc + curr.totalGeral, 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button 
-                                        disabled={isExporting || relatorios.length === 0} 
-                                        onClick={() => exportar('pdf')} 
-                                        className="bg-emerald-600 text-white px-4 py-2.5 rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 text-[10px] font-black uppercase shadow-lg shadow-emerald-100"
-                                    >
-                                        {isExporting ? <Icon name="loader" className="w-4 h-4 animate-spin" /> : <Icon name="file-text" className="w-4 h-4" />}
-                                        {isExporting ? "Gerando..." : "Exportar PDF"}
-                                    </button>
-                                </div>
+                            <div className="text-right">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Custo Total Acumulado</p>
+                                <p className="text-2xl font-black text-emerald-600">
+                                    R$ {relatorios.reduce((acc, curr) => acc + curr.totalGeral, 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}
+                                </p>
                             </div>
                         </div>
                     </header>
 
-                    <main className="flex-grow max-w-7xl mx-auto w-full p-4 md:p-6">
+                    <main className="flex-grow max-w-7xl mx-auto w-full p-6">
                         <div className="flex flex-col lg:flex-row gap-8">
-                            {/* Formulário */}
-                            <div className="lg:w-5/12">
-                                <form onSubmit={handleSubmit} className={`bg-white p-6 md:p-8 rounded-[2rem] md:rounded-[2.5rem] shadow-xl border-2 transition-all duration-500 ${editingId ? 'border-orange-400 ring-4 ring-orange-50' : 'border-white'} space-y-6`}>
-                                    <div className="flex justify-between items-center border-b pb-4">
-                                        <h2 className="text-xs font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
-                                            {editingId ? (
-                                                <><Icon name="edit-3" className="w-4 h-4 text-orange-500" /> Editando Lote</>
-                                            ) : (
-                                                <><Icon name="plus-circle" className="w-4 h-4 text-emerald-500" /> Registrar Lote</>
-                                            )}
-                                        </h2>
-                                        {editingId && (
-                                            <button type="button" onClick={handleCancelEdit} className="text-[10px] font-black text-rose-500 hover:bg-rose-50 px-3 py-1 rounded-lg uppercase">Cancelar</button>
-                                        )}
+                            <div className="lg:w-1/2 no-print">
+                                <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl shadow-xl border border-slate-100 space-y-6">
+                                    <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 border-b pb-4 flex items-center gap-2">
+                                        <Icon name="plus-circle" className="w-4 h-4 text-emerald-500" /> Registrar Produção
+                                    </h2>
+
+                                    <div className="grid grid-cols-1 gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Bloco / Talhão</label>
+                                            <input required name="bloco" value={formData.bloco} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" placeholder="Ex: Bloco A" />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qual Ciclo</label>
+                                                <input required name="ciclo" value={formData.ciclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none" placeholder="Ex: Alface" />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Total Dias Ciclo</label>
+                                                <input type="number" required name="diasCiclo" value={formData.diasCiclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qtd. Transp.</label>
+                                            <input type="number" required name="totalTransplantado" value={formData.totalTransplantado} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Qtd. Colhida (un)</label>
+                                            <input type="number" required name="totalColhido" value={formData.totalColhido} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold text-emerald-600 outline-none" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Total KG</label>
+                                            <input type="number" step="0.01" required name="totalKg" value={formData.totalKg} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-emerald-200 bg-emerald-50 font-bold text-emerald-700 outline-none" placeholder="0.00" />
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100">
-                                            <p className="text-[9px] font-black text-emerald-600 uppercase mb-1">Insumos</p>
-                                            <p className="text-lg font-black text-emerald-700">R$ {somaInsumosForm.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Peso Médio Estimado</p>
+                                            <p className="text-lg font-black text-slate-700">{statsForm.pesoMedio} <span className="text-[10px]">kg/un</span></p>
                                         </div>
-                                        <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
-                                            <p className="text-[9px] font-black text-blue-600 uppercase mb-1">Operacional</p>
-                                            <p className="text-lg font-black text-blue-700">R$ {somaOperacionalForm.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Bloco / Talhão</label>
-                                                <input required name="bloco" value={formData.bloco} onChange={handleChange} placeholder="Ex: Bloco A" className="w-full px-4 py-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:bg-white outline-none focus:ring-2 ring-emerald-50 transition-all font-bold" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Cultura / Ciclo</label>
-                                                <input required name="ciclo" value={formData.ciclo} onChange={handleChange} placeholder="Ex: Alface" className="w-full px-4 py-3 text-sm rounded-xl border border-slate-200 bg-slate-50 focus:bg-white outline-none focus:ring-2 ring-emerald-50 transition-all font-bold" />
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Início</label>
-                                                <input type="date" required name="dataInicio" value={formData.dataInicio} onChange={handleChange} className="w-full px-4 py-3 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none font-bold" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Término</label>
-                                                <input type="date" required name="dataTermino" value={formData.dataTermino} onChange={handleChange} className="w-full px-4 py-3 text-xs rounded-xl border border-slate-200 bg-slate-50 outline-none font-bold" />
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Transplantado (un)</label>
-                                                <input type="number" required name="totalTransplantado" value={formData.totalTransplantado} onChange={handleChange} className="w-full px-4 py-3 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold outline-none" />
-                                            </div>
-                                            <div>
-                                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 ml-1">Colhido (un)</label>
-                                                <input type="number" required name="totalColhido" value={formData.totalColhido} onChange={handleChange} className="w-full px-4 py-3 text-sm rounded-xl border border-slate-200 bg-slate-50 font-bold text-emerald-600 outline-none" />
-                                            </div>
+                                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">Custo por KG</p>
+                                            <p className="text-lg font-black text-emerald-600">R$ {statsForm.custoPorKg}</p>
                                         </div>
                                     </div>
 
-                                    {/* Insumos */}
-                                    <div className="space-y-3 p-4 bg-emerald-50/20 rounded-[1.5rem] border border-emerald-100">
-                                        <div className="flex justify-between items-center">
-                                            <label className="text-[10px] font-black text-emerald-700 uppercase tracking-widest">Insumos Detalhados</label>
-                                            <button type="button" onClick={adicionarInsumo} className="bg-emerald-600 text-white p-1 rounded-lg hover:bg-emerald-700 transition-colors"><Icon name="plus" className="w-4 h-4" /></button>
+                                    <div className="space-y-3 p-4 bg-emerald-50/30 rounded-2xl border border-emerald-100">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-[10px] font-black text-emerald-700 uppercase tracking-widest flex items-center gap-2"><Icon name="shopping-cart" className="w-3 h-3" /> Custos Insumos</label>
+                                            <button type="button" onClick={adicionarInsumo} className="text-emerald-600 p-1 hover:bg-emerald-100 rounded-lg border border-emerald-200 bg-white"><Icon name="plus" className="w-4 h-4" /></button>
                                         </div>
                                         {formData.custosInsumos.map((c, i) => (
-                                            <div key={i} className="flex gap-2 animate-fade-in">
-                                                <input placeholder="Descrição" name="descricao" value={c.descricao} onChange={(e) => handleCustoInsumoChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white font-medium outline-none shadow-sm" />
-                                                <input type="number" step="0.01" placeholder="R$" name="valor" value={c.valor} onChange={(e) => handleCustoInsumoChange(i, e)} className="w-20 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white outline-none shadow-sm" />
-                                                <button type="button" onClick={() => removerInsumo(i)} className="text-rose-400 hover:text-rose-600 px-1"><Icon name="trash-2" className="w-4 h-4" /></button>
+                                            <div key={i} className="flex gap-2">
+                                                <input placeholder="Descrição" name="descricao" value={c.descricao} onChange={(e) => handleCustoInsumoChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white" />
+                                                <input type="number" placeholder="R$" name="valor" value={c.valor} onChange={(e) => handleCustoInsumoChange(i, e)} className="w-24 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white" />
+                                                {formData.custosInsumos.length > 1 && <button type="button" onClick={() => removerInsumo(i)} className="text-rose-400"><Icon name="trash-2" className="w-4 h-4" /></button>}
                                             </div>
                                         ))}
                                     </div>
 
-                                    {/* Operacional */}
-                                    <div className="space-y-3 p-4 bg-blue-50/20 rounded-[1.5rem] border border-blue-100">
-                                        <div className="flex justify-between items-center">
-                                            <label className="text-[10px] font-black text-blue-700 uppercase tracking-widest">Custos Operacionais</label>
-                                            <button type="button" onClick={adicionarOperacional} className="bg-blue-600 text-white p-1 rounded-lg hover:bg-blue-700 transition-colors"><Icon name="plus" className="w-4 h-4" /></button>
+                                    <div className="space-y-3 p-4 bg-blue-50/30 rounded-2xl border border-blue-100">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-[10px] font-black text-blue-700 uppercase tracking-widest flex items-center gap-2"><Icon name="wrench" className="w-3 h-3" /> Custos Operacionais</label>
+                                            <button type="button" onClick={adicionarOperacional} className="text-blue-600 p-1 hover:bg-blue-100 rounded-lg border border-blue-200 bg-white"><Icon name="plus" className="w-4 h-4" /></button>
                                         </div>
                                         {formData.custosOperacionais.map((o, i) => (
-                                            <div key={i} className="flex gap-2 animate-fade-in">
-                                                <select name="categoria" value={o.categoria} onChange={(e) => handleOperacionalChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white font-medium outline-none shadow-sm">
-                                                    <option value="">Selecione...</option>
+                                            <div key={i} className="flex gap-2">
+                                                <select name="categoria" value={o.categoria} onChange={(e) => handleOperacionalChange(i, e)} className="flex-grow px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white outline-none">
+                                                    <option value="">Categoria...</option>
                                                     {categoriasOperacionais.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                                 </select>
-                                                <input type="number" step="0.01" placeholder="R$" name="valor" value={o.valor} onChange={(e) => handleOperacionalChange(i, e)} className="w-20 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white outline-none shadow-sm" />
-                                                <button type="button" onClick={() => removerOperacional(i)} className="text-rose-400 hover:text-rose-600 px-1"><Icon name="trash-2" className="w-4 h-4" /></button>
+                                                <input type="number" placeholder="R$" name="valor" value={o.valor} onChange={(e) => handleOperacionalChange(i, e)} className="w-24 px-3 py-2 text-xs rounded-lg border border-slate-200 font-bold bg-white" />
+                                                {formData.custosOperacionais.length > 1 && <button type="button" onClick={() => removerOperacional(i)} className="text-rose-400"><Icon name="trash-2" className="w-4 h-4" /></button>}
                                             </div>
                                         ))}
                                     </div>
 
-                                    <button type="submit" className={`w-full text-white font-black py-4 rounded-2xl uppercase tracking-widest text-[10px] shadow-xl flex items-center justify-center gap-3 transition-all active:scale-[0.98] ${editingId ? 'bg-orange-500 hover:bg-orange-600' : 'bg-emerald-600 hover:bg-emerald-700'}`}>
-                                        <Icon name={editingId ? "check-circle" : "save"} className="w-5 h-5" /> 
-                                        {editingId ? "Atualizar Registro" : "Salvar Lote"}
+                                    <button type="submit" className="w-full bg-emerald-600 text-white font-black py-4 rounded-2xl hover:bg-emerald-700 uppercase tracking-widest text-[10px] shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 transition-all active:scale-[0.98]">
+                                        <Icon name="save" className="w-4 h-4" /> Finalizar Lançamento
                                     </button>
                                 </form>
                             </div>
 
-                            {/* Histórico */}
-                            <div className="lg:w-7/12">
-                                <div className="bg-white rounded-[2rem] md:rounded-[2.5rem] shadow-xl border border-slate-100 overflow-hidden lg:sticky lg:top-32 flex flex-col max-h-[85vh]">
-                                    <div className="p-5 md:p-6 bg-slate-50 border-b flex items-center justify-between">
+                            <div className="lg:w-1/2">
+                                <div className="bg-white rounded-3xl shadow-xl border border-slate-100 overflow-hidden sticky top-6">
+                                    <div className="p-6 bg-slate-50 border-b flex flex-col sm:flex-row items-center justify-between gap-4">
                                         <div className="flex items-center gap-2">
-                                            <Icon name="history" className="w-5 h-5 text-emerald-600" />
-                                            <h2 className="text-xs font-black uppercase text-slate-700 tracking-wider">Histórico de Cultivo</h2>
+                                            <Icon name="clipboard-list" className="w-5 h-5 text-emerald-600" />
+                                            <h2 className="text-sm font-black uppercase text-slate-700">Histórico de Produção</h2>
                                         </div>
-                                        <span className="bg-white px-3 py-1 rounded-full border text-[9px] font-black text-slate-400 uppercase">{relatorios.length} Lotes</span>
+                                        <div className="flex gap-2 no-print">
+                                            <button onClick={exportarImagem} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-[9px] font-black uppercase text-slate-500 hover:bg-slate-100 transition-all shadow-sm">
+                                                <Icon name="image" className="w-3.5 h-3.5" /> Salvar PNG
+                                            </button>
+                                            <button onClick={exportarPDF} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 border border-emerald-700 rounded-lg text-[9px] font-black uppercase text-white hover:bg-emerald-700 transition-all shadow-sm">
+                                                <Icon name="file-text" className="w-3.5 h-3.5" /> Baixar PDF
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex-grow overflow-y-auto custom-scroll divide-y divide-slate-100">
+                                    <div className="divide-y max-h-[70vh] overflow-y-auto bg-white">
                                         {relatorios.length === 0 ? (
-                                            <div className="p-20 text-center">
-                                                <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-slate-200">
-                                                    <Icon name="sprout" className="w-8 h-8 text-slate-300" />
-                                                </div>
-                                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Nenhum lote registrado ainda</p>
+                                            <div className="p-20 text-center opacity-30">
+                                                <Icon name="leaf" className="w-12 h-12 mx-auto mb-4" />
+                                                <p className="text-xs font-bold uppercase tracking-widest">Aguardando Registros</p>
                                             </div>
                                         ) : relatorios.map(rel => (
-                                            <div key={rel.id} className="p-5 md:p-6 hover:bg-emerald-50/20 transition-all group relative">
+                                            <div key={rel.id} className="p-6 hover:bg-slate-50 transition-colors">
                                                 <div className="flex justify-between items-start mb-4">
                                                     <div>
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 uppercase">{rel.bloco}</span>
-                                                            <span className="text-[9px] font-bold text-slate-400 uppercase">{new Date(rel.dataInicio).toLocaleDateString('pt-BR')}</span>
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{rel.bloco} • {rel.dataRegistro}</p>
+                                                        <h3 className="font-black text-slate-800 uppercase text-base">{rel.ciclo}</h3>
+                                                        <div className="flex gap-2 mt-1">
+                                                            <span className="text-[10px] font-bold text-blue-600 uppercase bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">{rel.diasCiclo} dias</span>
+                                                            <span className="text-[10px] font-bold text-emerald-600 uppercase bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">{rel.totalKg} KG</span>
                                                         </div>
-                                                        <h3 className="font-black text-slate-800 uppercase text-base leading-none">{rel.ciclo}</h3>
-                                                        <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest">{rel.diasCiclo} dias</p>
                                                     </div>
-                                                    <div className="text-right flex flex-col items-end">
-                                                        <p className="font-black text-emerald-600 text-lg leading-none">R$ {rel.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
-                                                        <div className="flex gap-3 mt-4">
-                                                            <button onClick={() => handleEdit(rel)} className="p-2 bg-slate-100 rounded-lg text-slate-500 hover:bg-orange-100 hover:text-orange-600 transition-all">
-                                                                <Icon name="edit-2" className="w-4 h-4" />
-                                                            </button>
-                                                            <button onClick={() => handleDelete(rel.id)} className="p-2 bg-slate-100 rounded-lg text-slate-500 hover:bg-rose-100 hover:text-rose-600 transition-all">
-                                                                <Icon name="trash-2" className="w-4 h-4" />
-                                                            </button>
-                                                        </div>
+                                                    <div className="text-right">
+                                                        <p className="font-black text-emerald-600 text-lg">R$ {rel.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase">R$ {rel.custoPorKg.toFixed(2)} / kg</p>
                                                     </div>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-2 mt-2">
-                                                    <div className="text-[10px] font-medium text-slate-500">Colheita: <span className="font-black text-slate-700">{rel.totalColhido} un.</span></div>
-                                                    <div className="text-[10px] font-medium text-slate-500 text-right">Perda estimada: <span className="font-black text-rose-500">{rel.totalTransplantado - rel.totalColhido} un.</span></div>
+                                                
+                                                <div className="grid grid-cols-3 gap-2 text-[9px] font-bold mb-4">
+                                                    <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100 text-emerald-700">Insumos: R$ {rel.totalInsumos.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                                                    <div className="bg-blue-50 p-2 rounded-lg border border-blue-100 text-blue-700">Operac: R$ {rel.totalOperacional.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</div>
+                                                    <div className="bg-slate-100 p-2 rounded-lg border border-slate-200 text-slate-700">Médio: {rel.pesoMedio.toFixed(3)}kg</div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-400">
+                                                    <span>Eficiência:</span>
+                                                    <div className="flex-grow bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                                        <div className="bg-emerald-500 h-full" style={{width: `${Math.min((rel.totalColhido/rel.totalTransplantado)*100, 100)}%`}}></div>
+                                                    </div>
+                                                    <span className="text-slate-700">{Math.round((rel.totalColhido/rel.totalTransplantado)*100)}% colhido</span>
                                                 </div>
                                             </div>
                                         ))}
