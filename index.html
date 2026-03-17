@@ -63,9 +63,9 @@
 
         const App = () => {
             const [formData, setFormData] = useState({
-                bloco: '', ciclo: '', dataInicio: '', dataFim: '', 
+                bloco: '', ciclo: '', numCiclo: '', dataInicio: '', dataFim: '', 
                 totalTransplantado: '', totalColhido: '', totalKg: '',
-                custoVendaKg: '', // Campo preenchível pelo usuário
+                custoVendaKg: '', 
                 litrosDia: '',
                 custosInsumos: [{ descricao: '', valor: '' }],
                 custosOperacionais: [{ categoria: '', valor: '' }]
@@ -142,15 +142,17 @@
 
             const handleSubmit = (e) => {
                 e.preventDefault();
+                const agora = new Date();
                 const novoRelatorio = {
                     ...formData,
                     id: Date.now(),
                     ...metrics,
-                    dataRegistro: new Date().toLocaleDateString('pt-BR')
+                    dataRegistro: agora.toLocaleDateString('pt-BR'),
+                    horaRegistro: agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
                 };
                 setRelatorios([novoRelatorio, ...relatorios]);
                 setFormData({
-                    bloco: '', ciclo: '', dataInicio: '', dataFim: '', totalTransplantado: '', totalColhido: '', totalKg: '',
+                    bloco: '', ciclo: '', numCiclo: '', dataInicio: '', dataFim: '', totalTransplantado: '', totalColhido: '', totalKg: '',
                     custoVendaKg: '', litrosDia: '', custosInsumos: [{ descricao: '', valor: '' }], custosOperacionais: [{ categoria: '', valor: '' }]
                 });
             };
@@ -179,8 +181,10 @@
                                 <div key={rel.id} className="border-2 border-slate-100 p-8 rounded-[2.5rem] bg-white">
                                     <div className="flex justify-between items-start mb-6 border-b pb-4">
                                         <div>
-                                            <p className="text-xs font-black text-emerald-600 uppercase tracking-widest">{rel.bloco}</p>
-                                            <h3 className="text-3xl font-black text-slate-800 uppercase">{rel.ciclo}</h3>
+                                            <p className="text-xs font-black text-emerald-600 uppercase tracking-widest">{rel.bloco} • Registro: {rel.dataRegistro}</p>
+                                            <h3 className="text-3xl font-black text-slate-800 uppercase">
+                                                {rel.ciclo} <span className="text-emerald-500">#{rel.numCiclo}</span>
+                                            </h3>
                                             <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">
                                                 Período: {new Date(rel.dataInicio).toLocaleDateString()} — {new Date(rel.dataFim).toLocaleDateString()} ({rel.diasCiclo} dias)
                                             </p>
@@ -228,17 +232,20 @@
                         </div>
                     </div>
 
-                    {/* INTERFACE DO USUÁRIO */}
-                    <div className="h-2 w-full bg-emerald-600"></div>
-                    <header className="bg-white shadow-sm border-b p-6 no-print">
+                    {/* INTERFACE DO USUÁRIO - CABEÇALHO VERDE */}
+                    <header className="bg-emerald-700 shadow-md p-6 no-print">
                         <div className="max-w-7xl mx-auto flex justify-between items-center">
                             <div className="flex items-center gap-4">
-                                <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-10 w-auto" />
-                                <h1 className="text-lg font-black text-emerald-800 uppercase tracking-tighter">Fazenda Oasis <span className="text-slate-300 font-light mx-2">|</span> Relatório de Custo de Produção</h1>
+                                <div className="bg-white p-2 rounded-xl shadow-sm">
+                                    <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-10 w-auto" />
+                                </div>
+                                <h1 className="text-lg font-black text-white uppercase tracking-tighter">
+                                    Fazenda Oasis <span className="text-emerald-400 font-light mx-2">|</span> Relatório de Custo de Produção
+                                </h1>
                             </div>
                             <div className="text-right">
-                                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Investimento Total</p>
-                                <p className="text-xl font-black text-emerald-600">R$ {relatorios.reduce((acc, curr) => acc + parseFloat(curr.totalGeral), 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
+                                <p className="text-[10px] text-emerald-200 font-black uppercase tracking-widest">Investimento Acumulado</p>
+                                <p className="text-xl font-black text-white">R$ {relatorios.reduce((acc, curr) => acc + parseFloat(curr.totalGeral), 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p>
                             </div>
                         </div>
                     </header>
@@ -255,9 +262,13 @@
                                         <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Identificação (Bloco/Estufa)</label>
                                         <input required name="bloco" value={formData.bloco} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 ring-emerald-100" />
                                     </div>
-                                    <div className="col-span-2">
+                                    <div className="col-span-1">
                                         <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Variedade/Cultura</label>
                                         <input required name="ciclo" value={formData.ciclo} onChange={handleChange} className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 ring-emerald-100" />
+                                    </div>
+                                    <div className="col-span-1">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Nº do Ciclo</label>
+                                        <input type="number" required name="numCiclo" value={formData.numCiclo} onChange={handleChange} placeholder="Ex: 12" className="w-full px-4 py-2 text-sm rounded-xl border border-slate-200 bg-slate-50 outline-none focus:ring-2 ring-emerald-100" />
                                     </div>
                                     <div>
                                         <label className="text-[10px] font-black text-slate-400 uppercase mb-1 block">Início Plantio</label>
@@ -310,11 +321,11 @@
 
                                 <div className="p-4 bg-emerald-900 rounded-2xl text-white flex justify-between items-center shadow-lg">
                                     <div>
-                                        <p className="text-[9px] font-black uppercase opacity-60">Prod. $/KG</p>
-                                        <p className="text-2xl font-black text-emerald-400">R$ {metrics.custoProducaoKg}</p>
+                                        <p className="text-[9px] font-black uppercase opacity-60">Custo Produção</p>
+                                        <p className="text-2xl font-black text-emerald-400">R$ {metrics.custoProducaoKg}/kg</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-[9px] font-black uppercase opacity-60">Tempo Ciclo</p>
+                                        <p className="text-[9px] font-black uppercase opacity-60">Duração</p>
                                         <p className="text-2xl font-black">{metrics.diasCiclo} Dias</p>
                                     </div>
                                 </div>
@@ -377,8 +388,13 @@
                                     <div key={rel.id} className="p-6 hover:bg-slate-50/50 transition-colors">
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <p className="text-[9px] font-black text-emerald-600 uppercase mb-1">{rel.bloco}</p>
-                                                <h3 className="font-black text-slate-800 text-lg uppercase leading-tight">{rel.ciclo}</h3>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="text-[9px] font-black text-emerald-600 uppercase bg-emerald-50 px-1.5 py-0.5 rounded">{rel.bloco}</span>
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">Reg: {rel.dataRegistro} às {rel.horaRegistro}</span>
+                                                </div>
+                                                <h3 className="font-black text-slate-800 text-lg uppercase leading-tight">
+                                                    {rel.ciclo} <span className="text-emerald-500">#{rel.numCiclo}</span>
+                                                </h3>
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase mt-1">Duração: {rel.diasCiclo} dias</p>
                                             </div>
                                             <div className="text-right">
