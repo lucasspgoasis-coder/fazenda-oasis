@@ -1,140 +1,141 @@
-<!DOCTYPE html>
-<html lang="pt-BR" translate="no">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="google" content="notranslate">
-    <title>Fazenda Oasis - Relatório de Custo de Produção</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+import React, { useState, useEffect, useMemo } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot, query, deleteDoc, updateDoc } from 'firebase/firestore';
+
+// Configurações do Firebase vindas do ambiente
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'fazenda-oasis-v2';
+
+// Componente de Ícones SVG para evitar dependências externas pesadas
+const SvgIcon = ({ name, className = "w-4 h-4" }) => {
+    const icons = {
+        box: <><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></>,
+        package: <><path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/></>,
+        droplets: <><path d="M7 16.3c2.2 0 4-1.8 4-4 0-3.3-4-6-4-6s-4 2.7-4 6c0 2.2 1.8 4 4 4Z"/><path d="M17 16.3c2.2 0 4-1.8 4-4 0-3.3-4-6-4-6s-4 2.7-4 6c0 2.2 1.8 4 4 4Z"/></>,
+        zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>,
+        image: <><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></>,
+        file: <><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></>,
+        plus: <><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></>,
+        trash: <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></>,
+        pin: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></>,
+        chart: <><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></>
+    };
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+            {icons[name] || <circle cx="12" cy="12" r="10" />}
+        </svg>
+    );
+};
+
+export default function App() {
+    const [user, setUser] = useState(null);
+    const [relatorios, setRelatorios] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [exportingId, setExportingId] = useState(null);
+    const [isSaving, setIsSaving] = useState(false);
     
-    <!-- Bibliotecas de exportação -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    const [formData, setFormData] = useState({
+        bloco: '', ciclo: '', numCiclo: '', dataInicio: '', dataFim: '', 
+        totalTransplantado: '', totalColhido: '', totalKg: '', totalCaixas: '',
+        volumeTotalAgua: '', custoKgManual: '',
+        litrosDiaManual: '', litrosPlantaManual: '',
+        custosInsumos: [{ descricao: '', valor: '' }],
+        custosOperacionais: [{ descricao: '', valor: '' }]
+    });
 
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js" type="module"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js" type="module"></script>
-    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js" type="module"></script>
-
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
-        body { 
-            font-family: 'Inter', sans-serif; 
-            -webkit-font-smoothing: antialiased;
-        }
-        
-        .preview-container { position: sticky; top: 24px; }
-        
-        .export-node { 
-            background-color: white; 
-            transform: translateZ(0);
-        }
-
-        @media (max-width: 1024px) { .preview-container { position: static; } }
-        
-        .no-print { display: block; }
-        @media print { .no-print { display: none !important; } }
-
-        .spinner {
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-    </style>
-</head>
-<body class="bg-slate-100">
-    <div id="root"></div>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, setDoc, addDoc, onSnapshot, query, deleteDoc, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        window.FB = { initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, getFirestore, collection, doc, setDoc, addDoc, onSnapshot, query, deleteDoc, updateDoc, db, auth };
-    </script>
-
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
-
-        const SvgIcon = React.memo(({ name, className = "w-4 h-4" }) => {
-            const icons = {
-                box: (
-                    <>
-                        <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>
-                    </>
-                ),
-                package: (
-                    <>
-                        <path d="M16.5 9.4 7.5 4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><polyline points="3.29 7 12 12 20.71 7"/><line x1="12" y1="22" x2="12" y2="12"/>
-                    </>
-                ),
-                droplets: (
-                    <>
-                        <path d="M7 16.3c2.2 0 4-1.8 4-4 0-3.3-4-6-4-6s-4 2.7-4 6c0 2.2 1.8 4 4 4Z"/><path d="M17 16.3c2.2 0 4-1.8 4-4 0-3.3-4-6-4-6s-4 2.7-4 6c0 2.2 1.8 4 4 4Z"/>
-                    </>
-                ),
-                cart: (
-                    <>
-                        <circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/>
-                    </>
-                ),
-                zap: <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>,
-                image: (
-                    <>
-                        <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/>
-                    </>
-                ),
-                file: (
-                    <>
-                        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>
-                    </>
-                ),
-                save: (
-                    <>
-                        <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><circle cx="12" cy="13" r="3"/><path d="M7 3v4h8V3"/>
-                    </>
-                ),
-                pin: (
-                    <>
-                        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
-                    </>
-                ),
-                chart: (
-                    <>
-                        <line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>
-                    </>
-                ),
-                hammer: (
-                    <>
-                       <path d="m15 5 4 4"/><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m2 22 7-7"/><path d="M11 11a5 5 0 1 1 7 7 5 5 0 0 1-7-7Z"/>
-                    </>
-                )
-            };
-
-            return (
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={{pointerEvents: 'none'}}>
-                    {icons[name] || <circle cx="12" cy="12" r="10" />}
-                </svg>
-            );
+    // Inicialização da Autenticação
+    useEffect(() => {
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (e) {
+                console.error("Erro na autenticação:", e);
+            }
+        };
+        initAuth();
+        return onAuthStateChanged(auth, (u) => {
+            setUser(u);
+            setLoading(false);
         });
+    }, []);
 
-        const App = () => {
-            const [user, setUser] = useState(null);
-            const [relatorios, setRelatorios] = useState([]);
-            const [loading, setLoading] = useState(true);
-            const [exportingId, setExportingId] = useState(null);
-            const [isOffline, setIsOffline] = useState(false);
-            
-            const [formData, setFormData] = useState({
+    // Escuta em tempo real dos relatórios
+    useEffect(() => {
+        if (!user) return;
+        const collectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'relatorios');
+        const unsubscribe = onSnapshot(collectionRef, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
+            setRelatorios(data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+        }, (err) => console.error("Erro no Snapshot:", err));
+        return () => unsubscribe();
+    }, [user]);
+
+    // Cálculos Derivados (Métricas)
+    const metrics = useMemo(() => {
+        const kg = parseFloat(formData.totalKg) || 0;
+        const colhido = parseFloat(formData.totalColhido) || 0;
+        const pesoMedioKg = (kg > 0 && colhido > 0) ? (kg / colhido).toFixed(3) : "0.000";
+        
+        let dias = 0;
+        if (formData.dataInicio && formData.dataFim) {
+            const start = new Date(formData.dataInicio);
+            const end = new Date(formData.dataFim);
+            dias = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
+        }
+
+        const totalInsumos = formData.custosInsumos.reduce((a, c) => a + (parseFloat(c.valor) || 0), 0);
+        const totalOperacional = formData.custosOperacionais.reduce((a, c) => a + (parseFloat(c.valor) || 0), 0);
+        
+        return { 
+            diasCiclo: dias, 
+            totalInsumos, 
+            totalOperacional, 
+            totalGeral: totalInsumos + totalOperacional, 
+            pesoMedioKg 
+        };
+    }, [formData]);
+
+    const handleAddItem = (type) => {
+        setFormData(prev => ({
+            ...prev,
+            [type]: [...prev[type], { descricao: '', valor: '' }]
+        }));
+    };
+
+    const handleRemoveItem = (type, index) => {
+        setFormData(prev => ({
+            ...prev,
+            [type]: prev[type].filter((_, i) => i !== index)
+        }));
+    };
+
+    const handleUpdateItem = (type, index, field, value) => {
+        const newList = [...formData[type]];
+        newList[index][field] = value;
+        setFormData(prev => ({ ...prev, [type]: newList }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!user || isSaving) return;
+        setIsSaving(true);
+        try {
+            const payload = { 
+                ...formData, 
+                ...metrics, 
+                dataRegistro: new Date().toLocaleDateString('pt-BR'), 
+                timestamp: Date.now() 
+            };
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'relatorios'), payload);
+            setFormData({
                 bloco: '', ciclo: '', numCiclo: '', dataInicio: '', dataFim: '', 
                 totalTransplantado: '', totalColhido: '', totalKg: '', totalCaixas: '',
                 volumeTotalAgua: '', custoKgManual: '',
@@ -142,396 +143,364 @@
                 custosInsumos: [{ descricao: '', valor: '' }],
                 custosOperacionais: [{ descricao: '', valor: '' }]
             });
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'fazenda-oasis-v2';
+    const handleDelete = async (id) => {
+        if (!window.confirm("Deseja realmente excluir este relatório?")) return;
+        try {
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'relatorios', id));
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
-            useEffect(() => {
-                const initAuth = async () => {
-                    if (!window.FB) { setIsOffline(true); setLoading(false); return; }
-                    try {
-                        const { auth } = window.FB;
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await FB.signInWithCustomToken(auth, __initial_auth_token);
-                        } else { await FB.signInAnonymously(auth); }
-                        FB.onAuthStateChanged(auth, (u) => { 
-                            setUser(u); 
-                            if (!u) setIsOffline(true);
-                            setLoading(false);
-                        });
-                    } catch (e) { setIsOffline(true); setLoading(false); }
-                };
-                initAuth();
-            }, []);
+    const handleExport = async (id, format) => {
+        const node = document.getElementById(`rel-card-${id}`);
+        if (!node || exportingId) return;
+        setExportingId(id);
+        
+        try {
+            const html2canvas = (await import('html2canvas')).default;
+            const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+            
+            if (format === 'png') {
+                const link = document.createElement('a');
+                link.download = `Relatorio_Oasis_${id}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            } else {
+                const { jsPDF } = await import('jspdf');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 190;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, imgWidth, imgHeight);
+                pdf.save(`Relatorio_Oasis_${id}.pdf`);
+            }
+        } catch (err) {
+            console.error("Erro na exportação:", err);
+        } finally {
+            setExportingId(null);
+        }
+    };
 
-            useEffect(() => {
-                if (!user || isOffline) return;
-                const { db } = window.FB;
-                const collectionRef = FB.collection(db, 'artifacts', appId, 'public', 'data', 'relatorios');
-                const unsubscribe = FB.onSnapshot(collectionRef, 
-                    (snapshot) => {
-                        const data = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id }));
-                        setRelatorios(data.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
-                    }, 
-                    () => { setIsOffline(true); }
-                );
-                return () => unsubscribe();
-            }, [user, isOffline]);
+    if (loading) return (
+        <div className="min-h-screen flex items-center justify-center bg-emerald-900 text-white font-bold uppercase tracking-widest animate-pulse">
+            Carregando Sistema Oasis...
+        </div>
+    );
 
-            const metrics = useMemo(() => {
-                const kg = parseFloat(formData.totalKg) || 0;
-                const colhido = parseFloat(formData.totalColhido) || 0;
-                
-                const pesoMedioKg = (kg > 0 && colhido > 0) ? (kg / colhido).toFixed(3) : "0.000";
-                
-                let dias = 0;
-                if (formData.dataInicio && formData.dataFim) {
-                    const start = new Date(formData.dataInicio);
-                    const end = new Date(formData.dataFim);
-                    dias = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
-                }
-
-                const totalInsumos = formData.custosInsumos.reduce((a, c) => a + (parseFloat(c.valor) || 0), 0);
-                const totalOperacional = formData.custosOperacionais.reduce((a, c) => a + (parseFloat(c.valor) || 0), 0);
-                
-                return { 
-                    diasCiclo: dias, totalInsumos, totalOperacional, 
-                    totalGeral: totalInsumos + totalOperacional, 
-                    pesoMedioKg
-                };
-            }, [formData]);
-
-            const updateListItem = (type, index, field, value) => {
-                const newList = [...formData[type]];
-                newList[index][field] = value;
-                setFormData(prev => ({ ...prev, [type]: newList }));
-            };
-
-            const addListItem = (type) => {
-                setFormData(p => ({
-                    ...p, 
-                    [type]: [...p[type], {descricao: '', valor: ''}]
-                }));
-            };
-
-            const removeListItem = (type, index) => {
-                const newList = formData[type].filter((_, i) => i !== index);
-                if (newList.length === 0) newList.push({descricao: '', valor: ''});
-                setFormData(p => ({ ...p, [type]: newList }));
-            };
-
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-                const payload = { ...formData, ...metrics, dataRegistro: new Date().toLocaleDateString('pt-BR'), timestamp: Date.now() };
-                if (!isOffline && user) {
-                    const { db } = window.FB;
-                    await FB.addDoc(FB.collection(db, 'artifacts', appId, 'public', 'data', 'relatorios'), payload);
-                } else {
-                    setRelatorios(p => [{ ...payload, id: 'local-' + Date.now() }, ...p]);
-                }
-                setFormData({
-                    bloco: '', ciclo: '', numCiclo: '', dataInicio: '', dataFim: '', 
-                    totalTransplantado: '', totalColhido: '', totalKg: '', totalCaixas: '',
-                    volumeTotalAgua: '', custoKgManual: '',
-                    litrosDiaManual: '', litrosPlantaManual: '',
-                    custosInsumos: [{ descricao: '', valor: '' }],
-                    custosOperacionais: [{ descricao: '', valor: '' }]
-                });
-            };
-
-            const handleExport = async (id, format) => {
-                const node = document.getElementById(`rel-card-${id}`);
-                if (!node || exportingId) return;
-                setExportingId(id);
-                try {
-                    const canvas = await html2canvas(node, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false });
-                    if (format === 'png') {
-                        const link = document.createElement('a');
-                        link.download = `Relatorio_Oasis_${id}.png`;
-                        link.href = canvas.toDataURL('image/png', 1.0);
-                        link.click();
-                    } else {
-                        const { jsPDF } = window.jspdf;
-                        const pdf = new jsPDF('p', 'mm', 'a4');
-                        const imgWidth = 190;
-                        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-                        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, imgWidth, imgHeight);
-                        pdf.save(`Relatorio_Oasis_${id}.pdf`);
-                    }
-                } catch (err) { console.error(err); } finally { setExportingId(null); }
-            };
-
-            const renderCard = (rel, isPreview = false) => {
-                const cardId = isPreview ? 'preview' : rel.id;
-                const m = isPreview ? metrics : rel;
-
-                return (
-                    <div id={`rel-card-${cardId}`} className={`export-node bg-white rounded-[1.5rem] shadow-lg border-2 overflow-hidden ${isPreview ? 'border-amber-400 ring-4 ring-amber-50' : 'border-slate-200'}`}>
-                        
-                        {/* Header */}
-                        <div className="bg-emerald-900 p-4 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <img src="https://i.imgur.com/qsYPvR2.png" alt="Oasis" className="h-8 w-auto bg-white p-1 rounded-md" crossOrigin="anonymous" />
-                                <div className="text-white">
-                                    <h4 className="text-[10px] font-black uppercase tracking-widest leading-none">Fazenda Oasis</h4>
-                                    <p className="text-[7px] font-bold text-emerald-400 uppercase tracking-tighter mt-1">Gestão de Custos</p>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <span className="text-[7px] font-black text-emerald-200 uppercase bg-emerald-800/50 px-2 py-1 rounded">Registo Oficial</span>
-                            </div>
+    return (
+        <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-20">
+            {/* Header */}
+            <header className="bg-emerald-900 text-white p-6 shadow-lg mb-8 sticky top-0 z-50">
+                <div className="max-w-7xl mx-auto flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-white p-1 rounded-lg">
+                            <img src="https://i.imgur.com/qsYPvR2.png" alt="Logo Oasis" className="h-10 w-auto" />
                         </div>
-
-                        <div className={`p-4 border-b flex justify-between items-start ${isPreview ? 'bg-amber-50' : 'bg-slate-50'}`}>
-                            <div>
-                                <div className="flex gap-2 mb-1">
-                                    <span className="text-[8px] font-black text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded uppercase">{rel.bloco || 'BLOQUE'}</span>
-                                    <span className="text-[8px] font-black text-blue-700 bg-blue-100 px-1.5 py-0.5 rounded uppercase">{m.diasCiclo || 0} DIAS</span>
-                                </div>
-                                <h3 className="text-sm font-black text-slate-800 uppercase leading-none">{rel.ciclo || 'CULTURA'} #{rel.numCiclo || '0'}</h3>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-lg font-black text-emerald-700 leading-none">R$ {rel.custoKgManual || '0,00'}/kg</p>
-                                <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{rel.dataRegistro || 'Pendente'}</p>
-                            </div>
-                        </div>
-
-                        <div className="p-4 space-y-4">
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                                    <p className="text-[8px] font-black text-slate-400 uppercase mb-2 flex items-center gap-1"><SvgIcon name="box" className="w-2.5 h-2.5 text-slate-300"/> Produção</p>
-                                    <div className="space-y-1.5 text-[10px] font-bold text-slate-700">
-                                        <div className="flex justify-between"><span>Transp.:</span> <span>{rel.totalTransplantado || 0}</span></div>
-                                        <div className="flex justify-between text-emerald-600"><span>Colhido:</span> <span>{rel.totalColhido || 0}</span></div>
-                                        <div className="flex justify-between font-black"><span>Total:</span> <span>{rel.totalKg || 0}kg</span></div>
-                                    </div>
-                                </div>
-                                <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 flex flex-col justify-center text-emerald-900">
-                                    <p className="text-[8px] font-black text-emerald-500 uppercase mb-2 flex items-center gap-1"><SvgIcon name="package" className="w-2.5 h-2.5 text-emerald-400"/> Médias & Caixas</p>
-                                    <div className="space-y-1.5 text-[10px] font-bold">
-                                        <div className="flex justify-between font-black bg-emerald-100/50 p-1 rounded">
-                                            <span>Média Peso:</span> 
-                                            <span>{m.pesoMedioKg} kg</span>
-                                        </div>
-                                        <div className="flex justify-between"><span>Total Caixas:</span> <span>{rel.totalCaixas || 0}</span></div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="p-3 bg-blue-50/30 rounded-xl border border-blue-100 text-center">
-                                <p className="text-[8px] font-black text-blue-500 uppercase mb-2 flex items-center justify-center gap-1"><SvgIcon name="droplets" className="w-2.5 h-2.5 text-blue-300"/> Consumo Hídrico</p>
-                                <div className="grid grid-cols-3 gap-1 text-[11px] font-black text-blue-900">
-                                    <div><p className="text-[7px] text-blue-400 font-bold uppercase">Total</p><p>{rel.volumeTotalAgua || 0}L</p></div>
-                                    <div><p className="text-[7px] text-blue-400 font-bold uppercase">L/Dia</p><p>{rel.litrosDiaManual || '0.00'}L</p></div>
-                                    <div><p className="text-[7px] text-blue-400 font-bold uppercase">L/Planta</p><p>{rel.litrosPlantaManual || '0.00'}L</p></div>
-                                </div>
-                            </div>
-
-                            {/* Detalhamento do Investimento - Layout Ajustado */}
-                            <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-5">
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wide flex items-center gap-2 border-b pb-2">
-                                    <SvgIcon name="zap" className="w-3.5 h-3.5 text-slate-400"/> 
-                                    Detalhamento do Investimento
-                                </p>
-                                
-                                <div className="flex flex-col gap-6">
-                                    {/* Insumos Section */}
-                                    <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-emerald-700 uppercase flex items-center gap-1">
-                                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
-                                            1. Insumos
-                                        </p>
-                                        <div className="space-y-2 pl-3">
-                                            {rel.custosInsumos?.map((c, i) => c.descricao && (
-                                                <div key={i} className="flex justify-between items-center text-[11px] text-slate-600 font-medium">
-                                                    <span className="flex-1 pr-4 leading-tight italic">{c.descricao}</span>
-                                                    <span className="font-bold whitespace-nowrap text-slate-800">R$ {parseFloat(c.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                                                </div>
-                                            ))}
-                                            <div className="flex justify-between text-[11px] font-black text-emerald-800 pt-2 border-t border-emerald-100 mt-2">
-                                                <span className="uppercase">Subtotal Insumos</span>
-                                                <span>R$ {m.totalInsumos.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Operacional Section */}
-                                    <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-blue-700 uppercase flex items-center gap-1">
-                                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
-                                            2. Operacional
-                                        </p>
-                                        <div className="space-y-2 pl-3">
-                                            {rel.custosOperacionais?.map((c, i) => c.descricao && (
-                                                <div key={i} className="flex justify-between items-center text-[11px] text-slate-600 font-medium">
-                                                    <span className="flex-1 pr-4 leading-tight italic">{c.descricao}</span>
-                                                    <span className="font-bold whitespace-nowrap text-slate-800">R$ {parseFloat(c.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                                                </div>
-                                            ))}
-                                            <div className="flex justify-between text-[11px] font-black text-blue-800 pt-2 border-t border-blue-100 mt-2">
-                                                <span className="uppercase">Subtotal Operacional</span>
-                                                <span>R$ {m.totalOperacional.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className={`flex justify-between items-center p-4 rounded-xl shadow-inner ${isPreview ? 'bg-amber-600' : 'bg-emerald-950'} text-white`}>
-                                <div className="flex flex-col">
-                                    <span className="text-[9px] font-black uppercase opacity-70 tracking-tighter">Investimento Total Geral</span>
-                                    <span className="text-xl font-black text-amber-300 leading-tight">R$ {m.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
-                                </div>
-                                <div className="flex gap-2 no-print">
-                                    <button type="button" onClick={() => handleExport(cardId, 'png')} className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-all border border-white/10 flex items-center gap-1 text-[10px] font-bold">
-                                        <SvgIcon name="image" className="w-4 h-4"/> PNG
-                                    </button>
-                                    <button type="button" onClick={() => handleExport(cardId, 'pdf')} className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-all border border-white/10 flex items-center gap-1 text-[10px] font-bold">
-                                        <SvgIcon name="file" className="w-4 h-4"/> PDF
-                                    </button>
-                                </div>
-                            </div>
+                        <div>
+                            <h1 className="text-xl font-black uppercase tracking-tight leading-none">Oasis</h1>
+                            <p className="text-[10px] text-emerald-300 font-bold uppercase tracking-widest mt-1">Gestão de Produção</p>
                         </div>
                     </div>
-                );
-            };
-
-            if (loading) return (
-                <div className="min-h-screen flex items-center justify-center bg-emerald-900 text-white font-black uppercase tracking-widest text-xs italic">
-                    CONECTANDO AO SISTEMA OASIS...
                 </div>
-            );
+            </header>
 
-            return (
-                <div className="min-h-screen pb-20" translate="no">
-                    <header className="bg-emerald-900 p-6 shadow-xl mb-8 no-print">
-                        <div className="max-w-7xl mx-auto flex justify-between items-center text-white">
-                            <div className="flex items-center gap-4">
-                                <img src="https://i.imgur.com/qsYPvR2.png" alt="Oasis" className="h-8 bg-white p-1 rounded" crossOrigin="anonymous" />
-                                <h1 className="text-lg font-black uppercase tracking-tighter italic">Oasis | Gestão de Produção</h1>
+            <main className="max-w-7xl mx-auto px-4 grid lg:grid-cols-2 gap-8">
+                {/* Lado Esquerdo: Formulário */}
+                <section className="space-y-6">
+                    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-8">
+                        {/* Seção 1: Localização e Período */}
+                        <div>
+                            <h2 className="text-xs font-black uppercase text-slate-400 mb-4 flex items-center gap-2">
+                                <SvgIcon name="pin" className="w-3 h-3"/> Localização e Período
+                            </h2>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                    <input required value={formData.bloco} onChange={e => setFormData({...formData, bloco: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold focus:border-emerald-500 outline-none transition-all" placeholder="Bloco ou Área de Cultivo" />
+                                </div>
+                                <div>
+                                    <input required value={formData.ciclo} onChange={e => setFormData({...formData, ciclo: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold focus:border-emerald-500 outline-none transition-all" placeholder="Cultura (Ex: Alface)" />
+                                </div>
+                                <div>
+                                    <input type="number" required value={formData.numCiclo} onChange={e => setFormData({...formData, numCiclo: e.target.value})} className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold focus:border-emerald-500 outline-none transition-all" placeholder="Nº do Ciclo" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">Data Início</label>
+                                    <input type="date" required value={formData.dataInicio} onChange={e => setFormData({...formData, dataInicio: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">Data Colheita</label>
+                                    <input type="date" required value={formData.dataFim} onChange={e => setFormData({...formData, dataFim: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold text-sm" />
+                                </div>
                             </div>
                         </div>
-                    </header>
 
-                    <main className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-8">
-                        <form onSubmit={handleSubmit} className="space-y-6 no-print">
-                            {/* Localização */}
-                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 space-y-4">
-                                <h2 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><SvgIcon name="pin" className="w-3 h-3"/> Localização</h2>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="col-span-2"><input required value={formData.bloco} onChange={e => setFormData({...formData, bloco: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" placeholder="Bloco / Área" /></div>
-                                    <div><input required value={formData.ciclo} onChange={e => setFormData({...formData, ciclo: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" placeholder="Cultura" /></div>
-                                    <div><input type="number" required value={formData.numCiclo} onChange={e => setFormData({...formData, numCiclo: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" placeholder="Ciclo #" /></div>
-                                    <div><label className="text-[9px] font-black text-slate-400 block mb-1 uppercase text-center">Início</label><input type="date" required value={formData.dataInicio} onChange={e => setFormData({...formData, dataInicio: e.target.value})} className="w-full p-2 bg-slate-50 border rounded-xl font-bold text-xs" /></div>
-                                    <div><label className="text-[9px] font-black text-slate-400 block mb-1 uppercase text-center">Fim</label><input type="date" required value={formData.dataFim} onChange={e => setFormData({...formData, dataFim: e.target.value})} className="w-full p-2 bg-slate-50 border rounded-xl font-bold text-xs" /></div>
+                        {/* Seção 2: Produção */}
+                        <div>
+                            <h2 className="text-xs font-black uppercase text-slate-400 mb-4 flex items-center gap-2">
+                                <SvgIcon name="chart" className="w-3 h-3"/> Dados de Produção
+                            </h2>
+                            <div className="grid grid-cols-2 gap-4">
+                                <input type="number" placeholder="Total Transplantado (Un)" value={formData.totalTransplantado} onChange={e => setFormData({...formData, totalTransplantado: e.target.value})} className="p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none" />
+                                <input type="number" placeholder="Total Colhido (Un)" value={formData.totalColhido} onChange={e => setFormData({...formData, totalColhido: e.target.value})} className="p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none" />
+                                <input type="number" step="0.001" placeholder="Peso Total (KG)" value={formData.totalKg} onChange={e => setFormData({...formData, totalKg: e.target.value})} className="p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none" />
+                                <input type="number" placeholder="Total de Caixas" value={formData.totalCaixas} onChange={e => setFormData({...formData, totalCaixas: e.target.value})} className="p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl font-bold outline-none" />
+                            </div>
+                        </div>
+
+                        {/* Seção 3: Detalhamento Financeiro */}
+                        <div className="space-y-6">
+                            {/* Insumos */}
+                            <div>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2">
+                                        <SvgIcon name="package" className="w-3 h-3"/> Insumos Utilizados
+                                    </h2>
+                                    <button type="button" onClick={() => handleAddItem('custosInsumos')} className="text-emerald-600 bg-emerald-50 p-2 rounded-lg hover:bg-emerald-100 transition-colors">
+                                        <SvgIcon name="plus" className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <div className="space-y-2">
+                                    {formData.custosInsumos.map((item, idx) => (
+                                        <div key={idx} className="flex gap-2">
+                                            <input value={item.descricao} onChange={e => handleUpdateItem('custosInsumos', idx, 'descricao', e.target.value)} className="flex-1 p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm" placeholder="Ex: Adubo NPK" />
+                                            <input type="number" value={item.valor} onChange={e => handleUpdateItem('custosInsumos', idx, 'valor', e.target.value)} className="w-24 p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold" placeholder="0.00" />
+                                            <button type="button" onClick={() => handleRemoveItem('custosInsumos', idx)} className="p-2 text-slate-400 hover:text-red-500"><SvgIcon name="trash" /></button>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
 
-                            {/* Métricas */}
-                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 space-y-4">
-                                <h2 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><SvgIcon name="chart" className="w-3 h-3"/> Métricas de Colheita</h2>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="col-span-2"><input type="number" placeholder="Total Transplantado (Un)" value={formData.totalTransplantado} onChange={e => setFormData({...formData, totalTransplantado: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" /></div>
-                                    <div><input type="number" placeholder="Colhido (Un)" value={formData.totalColhido} onChange={e => setFormData({...formData, totalColhido: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" /></div>
-                                    <div><input type="number" step="0.001" placeholder="Total (KG)" value={formData.totalKg} onChange={e => setFormData({...formData, totalKg: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" /></div>
-                                    <div className="col-span-2"><input type="number" placeholder="Total Caixas" value={formData.totalCaixas} onChange={e => setFormData({...formData, totalCaixas: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" /></div>
+                            {/* Operacional */}
+                            <div>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h2 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2">
+                                        <SvgIcon name="zap" className="w-3 h-3"/> Custos Operacionais
+                                    </h2>
+                                    <button type="button" onClick={() => handleAddItem('custosOperacionais')} className="text-blue-600 bg-blue-50 p-2 rounded-lg hover:bg-blue-100 transition-colors">
+                                        <SvgIcon name="plus" className="w-4 h-4" />
+                                    </button>
+                                </div>
+                                <div className="space-y-2">
+                                    {formData.custosOperacionais.map((item, idx) => (
+                                        <div key={idx} className="flex gap-2">
+                                            <input value={item.descricao} onChange={e => handleUpdateItem('custosOperacionais', idx, 'descricao', e.target.value)} className="flex-1 p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm" placeholder="Ex: Energia Elétrica" />
+                                            <input type="number" value={item.valor} onChange={e => handleUpdateItem('custosOperacionais', idx, 'valor', e.target.value)} className="w-24 p-3 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold" placeholder="0.00" />
+                                            <button type="button" onClick={() => handleRemoveItem('custosOperacionais', idx)} className="p-2 text-slate-400 hover:text-red-500"><SvgIcon name="trash" /></button>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Consumo Hídrico Manual */}
-                            <div className="bg-blue-900 p-6 rounded-[2rem] shadow-sm space-y-4">
-                                <h2 className="text-xs font-black uppercase text-blue-200 flex items-center gap-2"><SvgIcon name="droplets" className="w-3 h-3 text-blue-400"/> Consumo Hídrico (Manual)</h2>
-                                <div className="grid grid-cols-3 gap-3">
-                                    <div className="space-y-1">
-                                        <label className="text-[8px] font-black text-blue-300 uppercase px-1">Total (L)</label>
-                                        <input type="number" value={formData.volumeTotalAgua} onChange={e => setFormData({...formData, volumeTotalAgua: e.target.value})} className="w-full p-3 bg-blue-800 border-2 border-blue-700 rounded-xl font-bold text-white placeholder:text-blue-500" placeholder="0" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[8px] font-black text-blue-300 uppercase px-1">Ltrs/Dia</label>
-                                        <input type="number" step="0.01" value={formData.litrosDiaManual} onChange={e => setFormData({...formData, litrosDiaManual: e.target.value})} className="w-full p-3 bg-blue-800 border-2 border-blue-700 rounded-xl font-bold text-white placeholder:text-blue-500" placeholder="0.00" />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <label className="text-[8px] font-black text-blue-300 uppercase px-1">Ltrs/Plant</label>
-                                        <input type="number" step="0.01" value={formData.litrosPlantaManual} onChange={e => setFormData({...formData, litrosPlantaManual: e.target.value})} className="w-full p-3 bg-blue-800 border-2 border-blue-700 rounded-xl font-bold text-white placeholder:text-blue-500" placeholder="0.00" />
-                                    </div>
+                        {/* Seção 4: Hídrico */}
+                        <div className="bg-blue-900 p-6 rounded-[2rem] text-white">
+                            <h2 className="text-xs font-black uppercase text-blue-300 mb-4 flex items-center gap-2">
+                                <SvgIcon name="droplets" className="w-3 h-3"/> Consumo Hídrico Manual
+                            </h2>
+                            <div className="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label className="text-[9px] uppercase font-bold text-blue-400 mb-1 block">Total (L)</label>
+                                    <input type="number" value={formData.volumeTotalAgua} onChange={e => setFormData({...formData, volumeTotalAgua: e.target.value})} className="w-full bg-blue-800 border-none rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 ring-blue-500" placeholder="0" />
+                                </div>
+                                <div>
+                                    <label className="text-[9px] uppercase font-bold text-blue-400 mb-1 block">L/Dia</label>
+                                    <input type="number" value={formData.litrosDiaManual} onChange={e => setFormData({...formData, litrosDiaManual: e.target.value})} className="w-full bg-blue-800 border-none rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 ring-blue-500" placeholder="0.00" />
+                                </div>
+                                <div>
+                                    <label className="text-[9px] uppercase font-bold text-blue-400 mb-1 block">L/Planta</label>
+                                    <input type="number" value={formData.litrosPlantaManual} onChange={e => setFormData({...formData, litrosPlantaManual: e.target.value})} className="w-full bg-blue-800 border-none rounded-xl p-3 text-sm font-bold outline-none focus:ring-2 ring-blue-500" placeholder="0.00" />
                                 </div>
                             </div>
+                        </div>
 
-                            {/* Custos Insumos */}
-                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-xs font-black uppercase text-emerald-600 flex items-center gap-2"><SvgIcon name="zap" className="w-3 h-3"/> 1. Insumos</h2>
-                                    <button type="button" onClick={() => addListItem('custosInsumos')} className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase">+ Adicionar</button>
-                                </div>
-                                {formData.custosInsumos.map((item, idx) => (
-                                    <div key={idx} className="flex gap-2 items-center animate-in slide-in-from-left-2 duration-200">
-                                        <input placeholder="Ex: Sementes" value={item.descricao} onChange={e => updateListItem('custosInsumos', idx, 'descricao', e.target.value)} className="flex-1 p-3 text-xs bg-slate-50 border-2 border-slate-100 rounded-xl font-semibold focus:border-emerald-200 outline-none" />
-                                        <input type="number" step="0.01" placeholder="R$ 0,00" value={item.valor} onChange={e => updateListItem('custosInsumos', idx, 'valor', e.target.value)} className="w-24 p-3 text-xs bg-slate-50 border-2 border-slate-100 rounded-xl font-bold focus:border-emerald-200 outline-none" />
-                                        <button type="button" onClick={() => removeListItem('custosInsumos', idx)} className="text-red-400 font-bold px-2 hover:bg-red-50 rounded-lg">×</button>
-                                    </div>
-                                ))}
+                        {/* Custo Médio Alvo */}
+                        <div>
+                             <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Custo Final Estimado (R$/kg)</label>
+                             <input value={formData.custoKgManual} onChange={e => setFormData({...formData, custoKgManual: e.target.value})} className="w-full p-4 bg-emerald-50 border-2 border-emerald-100 rounded-2xl text-xl font-black text-emerald-900 outline-none" placeholder="0,00" />
+                        </div>
+
+                        <button type="submit" disabled={isSaving} className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black py-5 rounded-2xl shadow-lg shadow-emerald-200 transition-all flex items-center justify-center gap-2 uppercase tracking-widest">
+                            {isSaving ? "Gravando..." : "Salvar Relatório"}
+                        </button>
+                    </form>
+                </section>
+
+                {/* Lado Direito: Preview e Lista */}
+                <section className="space-y-8">
+                    {/* Card de Visualização em Tempo Real */}
+                    <div className="sticky top-28">
+                        <div className="mb-4 flex items-center justify-between">
+                            <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest italic">Visualização Prévia</h2>
+                            <span className="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black rounded-full uppercase">Pendente</span>
+                        </div>
+                        <RelatorioCard rel={formData} metrics={metrics} isPreview={true} onDelete={() => {}} onExport={() => {}} />
+                    </div>
+
+                    {/* Histórico */}
+                    <div className="space-y-6 pt-10">
+                        <h2 className="text-xl font-black text-slate-800 flex items-center gap-3">
+                            <span className="w-2 h-8 bg-emerald-500 rounded-full"></span>
+                            Relatórios Recentes
+                        </h2>
+                        <div className="space-y-6">
+                            {relatorios.map(rel => (
+                                <RelatorioCard 
+                                    key={rel.id} 
+                                    rel={rel} 
+                                    metrics={rel} 
+                                    onDelete={() => handleDelete(rel.id)} 
+                                    onExport={(format) => handleExport(rel.id, format)} 
+                                    isExporting={exportingId === rel.id}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    );
+}
+
+// Sub-componente para o Card do Relatório
+function RelatorioCard({ rel, metrics, isPreview = false, onDelete, onExport, isExporting }) {
+    const cardId = isPreview ? 'preview' : rel.id;
+    
+    return (
+        <div id={`rel-card-${cardId}`} className={`bg-white rounded-[2rem] shadow-xl border-2 overflow-hidden transition-all duration-300 ${isPreview ? 'border-amber-400 ring-4 ring-amber-50' : 'border-slate-100 hover:border-emerald-200'}`}>
+            {/* Header Visual */}
+            <div className="bg-emerald-900 p-5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <img src="https://i.imgur.com/qsYPvR2.png" alt="Oasis" className="h-8 w-auto bg-white p-1 rounded-lg" />
+                    <div>
+                        <h4 className="text-[10px] font-black text-white uppercase tracking-widest leading-none">Fazenda Oasis</h4>
+                        <p className="text-[7px] font-bold text-emerald-400 uppercase mt-1">Registro Oficial de Safra</p>
+                    </div>
+                </div>
+                {!isPreview && (
+                    <button onClick={onDelete} className="text-white/30 hover:text-red-400 transition-colors">
+                        <SvgIcon name="trash" className="w-5 h-5" />
+                    </button>
+                )}
+            </div>
+
+            {/* Info Principal */}
+            <div className={`p-6 border-b flex justify-between items-start ${isPreview ? 'bg-amber-50' : 'bg-slate-50'}`}>
+                <div>
+                    <div className="flex gap-2 mb-2">
+                        <span className="text-[9px] font-black text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full uppercase">{rel.bloco || 'BLOCO'}</span>
+                        <span className="text-[9px] font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full uppercase">{metrics.diasCiclo || 0} DIAS</span>
+                    </div>
+                    <h3 className="text-lg font-black text-slate-800 uppercase leading-none">
+                        {rel.ciclo || 'CULTURA'} #{rel.numCiclo || '0'}
+                    </h3>
+                </div>
+                <div className="text-right">
+                    <p className="text-2xl font-black text-emerald-700 leading-none">R$ {rel.custoKgManual || '0,00'}/kg</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase mt-2">{rel.dataRegistro || 'Processando...'}</p>
+                </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+                {/* Grades de Produção */}
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                        <p className="text-[9px] font-black text-slate-400 uppercase mb-3 flex items-center gap-1">
+                            <SvgIcon name="box" className="w-3 h-3"/> Produção
+                        </p>
+                        <div className="space-y-2 text-xs font-bold text-slate-700">
+                            <div className="flex justify-between opacity-70"><span>Transplantado:</span> <span>{rel.totalTransplantado || 0}</span></div>
+                            <div className="flex justify-between text-emerald-600"><span>Colhido:</span> <span>{rel.totalColhido || 0}</span></div>
+                            <div className="flex justify-between font-black pt-1 border-t"><span>Total KG:</span> <span>{rel.totalKg || 0}kg</span></div>
+                        </div>
+                    </div>
+                    <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                        <p className="text-[9px] font-black text-emerald-500 uppercase mb-3 flex items-center gap-1">
+                            <SvgIcon name="package" className="w-3 h-3"/> Médias
+                        </p>
+                        <div className="space-y-2 text-xs font-bold text-emerald-900">
+                            <div className="flex justify-between bg-white/50 p-1.5 rounded-lg border border-emerald-100">
+                                <span>Peso Médio:</span> 
+                                <span className="font-black">{metrics.pesoMedioKg}kg</span>
                             </div>
+                            <div className="flex justify-between pt-1"><span>Total Caixas:</span> <span>{rel.totalCaixas || 0}</span></div>
+                        </div>
+                    </div>
+                </div>
 
-                            {/* Custos Operacionais */}
-                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <h2 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2"><SvgIcon name="hammer" className="w-3 h-3"/> 2. Operacional</h2>
-                                    <button type="button" onClick={() => addListItem('custosOperacionais')} className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase">+ Adicionar</button>
-                                </div>
-                                {formData.custosOperacionais.map((item, idx) => (
-                                    <div key={idx} className="flex gap-2 items-center animate-in slide-in-from-left-2 duration-200">
-                                        <input placeholder="Ex: Mão de Obra" value={item.descricao} onChange={e => updateListItem('custosOperacionais', idx, 'descricao', e.target.value)} className="flex-1 p-3 text-xs bg-slate-50 border-2 border-slate-100 rounded-xl font-semibold focus:border-blue-200 outline-none" />
-                                        <input type="number" step="0.01" placeholder="R$ 0,00" value={item.valor} onChange={e => updateListItem('custosOperacionais', idx, 'valor', e.target.value)} className="w-24 p-3 text-xs bg-slate-50 border-2 border-slate-100 rounded-xl font-bold focus:border-blue-200 outline-none" />
-                                        <button type="button" onClick={() => removeListItem('custosOperacionais', idx)} className="text-red-400 font-bold px-2 hover:bg-red-50 rounded-lg">×</button>
-                                    </div>
-                                ))}
+                {/* Hídrico */}
+                <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
+                    <p className="text-[9px] font-black text-blue-500 uppercase mb-3 flex items-center justify-center gap-1">
+                        <SvgIcon name="droplets" className="w-3 h-3"/> Performance Hídrica
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 text-center text-blue-900 font-black">
+                        <div><p className="text-[8px] text-blue-400 font-bold uppercase mb-0.5">Total</p><p className="text-sm">{rel.volumeTotalAgua || 0}L</p></div>
+                        <div><p className="text-[8px] text-blue-400 font-bold uppercase mb-0.5">Média/Dia</p><p className="text-sm">{rel.litrosDiaManual || '0.00'}L</p></div>
+                        <div><p className="text-[8px] text-blue-400 font-bold uppercase mb-0.5">L/Planta</p><p className="text-sm">{rel.litrosPlantaManual || '0.00'}L</p></div>
+                    </div>
+                </div>
+
+                {/* Detalhamento Financeiro */}
+                <div className="space-y-5 bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2 flex items-center gap-2">
+                        <SvgIcon name="zap" className="w-3 h-3" /> Detalhamento do Investimento
+                    </p>
+                    
+                    {/* Lista Insumos */}
+                    <div className="space-y-2">
+                        <p className="text-[9px] font-black text-emerald-600 uppercase">1. Insumos</p>
+                        {rel.custosInsumos?.filter(c => c.descricao).map((c, i) => (
+                            <div key={i} className="flex justify-between text-[11px] text-slate-600">
+                                <span className="italic">{c.descricao}</span>
+                                <span className="font-bold">R$ {parseFloat(c.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                             </div>
+                        ))}
+                        <div className="flex justify-between text-[11px] font-black text-emerald-800 border-t border-emerald-100 pt-1">
+                            <span>SUBTOTAL INSUMOS</span>
+                            <span>R$ {metrics.totalInsumos.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                        </div>
+                    </div>
 
-                            {/* Preço de Venda */}
-                            <div className="bg-emerald-950 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
-                                <div className="relative z-10">
-                                    <label className="text-[10px] font-black uppercase opacity-60 mb-2 block">Preço de Venda Sugerido (R$/KG)</label>
-                                    <input type="number" step="0.01" value={formData.custoKgManual} onChange={e => setFormData({...formData, custoKgManual: e.target.value})} className="w-full text-4xl font-black bg-transparent border-b-2 border-emerald-400 outline-none placeholder:text-emerald-900" placeholder="0,00" />
-                                </div>
-                                <div className="absolute right-[-20px] bottom-[-20px] opacity-10 text-emerald-800">
-                                    <SvgIcon name="cart" className="w-40 h-40" />
-                                </div>
+                    {/* Lista Operacional */}
+                    <div className="space-y-2">
+                        <p className="text-[9px] font-black text-blue-600 uppercase">2. Operacional</p>
+                        {rel.custosOperacionais?.filter(c => c.descricao).map((c, i) => (
+                            <div key={i} className="flex justify-between text-[11px] text-slate-600">
+                                <span className="italic">{c.descricao}</span>
+                                <span className="font-bold">R$ {parseFloat(c.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                             </div>
+                        ))}
+                        <div className="flex justify-between text-[11px] font-black text-blue-800 border-t border-blue-100 pt-1">
+                            <span>SUBTOTAL OPERACIONAL</span>
+                            <span>R$ {metrics.totalOperacional.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                        </div>
+                    </div>
+                </div>
 
-                            <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-6 rounded-[2rem] uppercase shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
-                                <SvgIcon name="save" className="w-5 h-5"/>
-                                Gravar Relatório
+                {/* Rodapé e Ações */}
+                <div className={`p-5 rounded-2xl flex items-center justify-between shadow-inner ${isPreview ? 'bg-amber-600' : 'bg-emerald-950'} text-white`}>
+                    <div>
+                        <span className="text-[10px] font-bold uppercase opacity-60 block tracking-tighter">Investimento Total</span>
+                        <span className="text-2xl font-black text-amber-300">R$ {metrics.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                    </div>
+                    {!isPreview && (
+                        <div className="flex gap-2">
+                            <button disabled={isExporting} onClick={() => onExport('png')} className="bg-white/10 hover:bg-white/20 p-3 rounded-xl transition-all flex items-center gap-2 text-[10px] font-black">
+                                <SvgIcon name="image" className="w-4 h-4" /> PNG
                             </button>
-                        </form>
-
-                        <div className="space-y-8">
-                            <div className="preview-container space-y-4 no-print">
-                                <h2 className="text-[10px] font-black uppercase text-amber-600 px-4 flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
-                                    Pré-visualização em Tempo Real
-                                </h2>
-                                {renderCard(formData, true)}
-                            </div>
-                            
-                            <div className="space-y-4">
-                                <h2 className="text-[10px] font-black uppercase text-slate-400 px-4">Histórico Guardado</h2>
-                                {relatorios.length === 0 ? (
-                                    <div className="p-10 border-4 border-dashed border-slate-200 rounded-[2rem] text-center text-slate-300 font-black uppercase text-[10px]">
-                                        Nenhum registo encontrado
-                                    </div>
-                                ) : relatorios.map(rel => (
-                                    <div key={rel.id} className="animate-in fade-in zoom-in-95 duration-300">
-                                        {renderCard(rel, false)}
-                                    </div>
-                                ))}
-                            </div>
+                            <button disabled={isExporting} onClick={() => onExport('pdf')} className="bg-white/10 hover:bg-white/20 p-3 rounded-xl transition-all flex items-center gap-2 text-[10px] font-black">
+                                <SvgIcon name="file" className="w-4 h-4" /> PDF
+                            </button>
                         </div>
-                    </main>
+                    )}
                 </div>
-            );
-        };
-
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+            </div>
+        </div>
+    );
+}
