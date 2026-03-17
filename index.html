@@ -299,64 +299,76 @@
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                                     <p className="text-[8px] font-black text-slate-400 uppercase mb-2 flex items-center gap-1"><SvgIcon name="box" className="w-2.5 h-2.5 text-slate-300"/> Produção</p>
-                                    <div className="space-y-1.5 text-[10px] font-bold">
-                                        <div className="flex justify-between text-slate-500"><span>Transp.:</span> <span>{rel.totalTransplantado || 0}</span></div>
+                                    <div className="space-y-1.5 text-[10px] font-bold text-slate-700">
+                                        <div className="flex justify-between"><span>Transp.:</span> <span>{rel.totalTransplantado || 0}</span></div>
                                         <div className="flex justify-between text-emerald-600"><span>Colhido:</span> <span>{rel.totalColhido || 0}</span></div>
-                                        <div className="flex justify-between text-slate-500 font-black"><span>Total:</span> <span>{rel.totalKg || 0}kg</span></div>
+                                        <div className="flex justify-between font-black"><span>Total:</span> <span>{rel.totalKg || 0}kg</span></div>
                                     </div>
                                 </div>
-                                <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 flex flex-col justify-center">
+                                <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 flex flex-col justify-center text-emerald-900">
                                     <p className="text-[8px] font-black text-emerald-500 uppercase mb-2 flex items-center gap-1"><SvgIcon name="package" className="w-2.5 h-2.5 text-emerald-400"/> Médias & Caixas</p>
                                     <div className="space-y-1.5 text-[10px] font-bold">
-                                        <div className="flex justify-between text-emerald-900 font-black bg-emerald-100 p-1 rounded">
+                                        <div className="flex justify-between font-black bg-emerald-100/50 p-1 rounded">
                                             <span>Média Peso:</span> 
-                                            <span>{m.pesoMedioKg} kg/un</span>
+                                            <span>{m.pesoMedioKg} kg</span>
                                         </div>
-                                        <div className="flex justify-between text-emerald-800"><span>Total Caixas:</span> <span>{rel.totalCaixas || 0}</span></div>
+                                        <div className="flex justify-between"><span>Total Caixas:</span> <span>{rel.totalCaixas || 0}</span></div>
                                     </div>
                                 </div>
                             </div>
 
                             <div className="p-3 bg-blue-50/30 rounded-xl border border-blue-100 text-center">
                                 <p className="text-[8px] font-black text-blue-500 uppercase mb-2 flex items-center justify-center gap-1"><SvgIcon name="droplets" className="w-2.5 h-2.5 text-blue-300"/> Consumo Hídrico</p>
-                                <div className="grid grid-cols-3 gap-1 text-[10px] font-bold">
-                                    <div><p className="text-[7px] text-blue-400">TOTAL</p><p>{rel.volumeTotalAgua || 0}L</p></div>
-                                    <div><p className="text-[7px] text-blue-400">L/DIA</p><p>{rel.litrosDiaManual || '0.00'}L</p></div>
-                                    <div><p className="text-[7px] text-blue-400">L/PLANT</p><p>{rel.litrosPlantaManual || '0.00'}L</p></div>
+                                <div className="grid grid-cols-3 gap-1 text-[11px] font-black text-blue-900">
+                                    <div><p className="text-[7px] text-blue-400 font-bold uppercase">Total</p><p>{rel.volumeTotalAgua || 0}L</p></div>
+                                    <div><p className="text-[7px] text-blue-400 font-bold uppercase">L/Dia</p><p>{rel.litrosDiaManual || '0.00'}L</p></div>
+                                    <div><p className="text-[7px] text-blue-400 font-bold uppercase">L/Planta</p><p>{rel.litrosPlantaManual || '0.00'}L</p></div>
                                 </div>
                             </div>
 
-                            <div className="p-3 bg-white border border-slate-100 rounded-xl space-y-3">
-                                <p className="text-[8px] font-black text-slate-400 uppercase flex items-center gap-1"><SvgIcon name="zap" className="w-2.5 h-2.5 text-slate-300"/> Detalhamento do Investimento</p>
+                            {/* Detalhamento do Investimento - Layout Ajustado */}
+                            <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-5">
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-wide flex items-center gap-2 border-b pb-2">
+                                    <SvgIcon name="zap" className="w-3.5 h-3.5 text-slate-400"/> 
+                                    Detalhamento do Investimento
+                                </p>
                                 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1">
-                                        <p className="text-[7px] font-black text-emerald-600 uppercase">1. Insumos</p>
-                                        <div className="space-y-0.5 border-l-2 border-emerald-50 pl-2">
+                                <div className="flex flex-col gap-6">
+                                    {/* Insumos Section */}
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-emerald-700 uppercase flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full"></span>
+                                            1. Insumos
+                                        </p>
+                                        <div className="space-y-2 pl-3">
                                             {rel.custosInsumos?.map((c, i) => c.descricao && (
-                                                <div key={i} className="flex justify-between text-[8px] text-slate-500 font-semibold italic">
-                                                    <span className="truncate max-w-[60px]">{c.descricao}</span>
-                                                    <span>R$ {parseFloat(c.valor || 0).toFixed(2)}</span>
+                                                <div key={i} className="flex justify-between items-center text-[11px] text-slate-600 font-medium">
+                                                    <span className="flex-1 pr-4 leading-tight italic">{c.descricao}</span>
+                                                    <span className="font-bold whitespace-nowrap text-slate-800">R$ {parseFloat(c.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                                                 </div>
                                             ))}
-                                            <div className="flex justify-between text-[9px] font-black text-emerald-700 pt-1 border-t border-emerald-50 mt-1">
-                                                <span>Subtotal</span>
+                                            <div className="flex justify-between text-[11px] font-black text-emerald-800 pt-2 border-t border-emerald-100 mt-2">
+                                                <span className="uppercase">Subtotal Insumos</span>
                                                 <span>R$ {m.totalInsumos.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                                             </div>
                                         </div>
                                     </div>
                                     
-                                    <div className="space-y-1">
-                                        <p className="text-[7px] font-black text-blue-600 uppercase">2. Operacional</p>
-                                        <div className="space-y-0.5 border-l-2 border-blue-50 pl-2">
+                                    {/* Operacional Section */}
+                                    <div className="space-y-3">
+                                        <p className="text-[10px] font-black text-blue-700 uppercase flex items-center gap-1">
+                                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                                            2. Operacional
+                                        </p>
+                                        <div className="space-y-2 pl-3">
                                             {rel.custosOperacionais?.map((c, i) => c.descricao && (
-                                                <div key={i} className="flex justify-between text-[8px] text-slate-500 font-semibold italic">
-                                                    <span className="truncate max-w-[60px]">{c.descricao}</span>
-                                                    <span>R$ {parseFloat(c.valor || 0).toFixed(2)}</span>
+                                                <div key={i} className="flex justify-between items-center text-[11px] text-slate-600 font-medium">
+                                                    <span className="flex-1 pr-4 leading-tight italic">{c.descricao}</span>
+                                                    <span className="font-bold whitespace-nowrap text-slate-800">R$ {parseFloat(c.valor || 0).toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                                                 </div>
                                             ))}
-                                            <div className="flex justify-between text-[9px] font-black text-blue-700 pt-1 border-t border-blue-50 mt-1">
-                                                <span>Subtotal</span>
+                                            <div className="flex justify-between text-[11px] font-black text-blue-800 pt-2 border-t border-blue-100 mt-2">
+                                                <span className="uppercase">Subtotal Operacional</span>
                                                 <span>R$ {m.totalOperacional.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                                             </div>
                                         </div>
@@ -364,17 +376,17 @@
                                 </div>
                             </div>
 
-                            <div className={`flex justify-between items-center p-3 rounded-xl ${isPreview ? 'bg-amber-600' : 'bg-emerald-950'} text-white`}>
+                            <div className={`flex justify-between items-center p-4 rounded-xl shadow-inner ${isPreview ? 'bg-amber-600' : 'bg-emerald-950'} text-white`}>
                                 <div className="flex flex-col">
-                                    <span className="text-[8px] font-black uppercase opacity-60">Custo Total do Ciclo</span>
-                                    <span className="text-base font-black text-amber-300 leading-tight">R$ {m.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                    <span className="text-[9px] font-black uppercase opacity-70 tracking-tighter">Investimento Total Geral</span>
+                                    <span className="text-xl font-black text-amber-300 leading-tight">R$ {m.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                                 </div>
-                                <div className="flex gap-1 no-print">
-                                    <button type="button" onClick={() => handleExport(cardId, 'png')} className="bg-white/10 hover:bg-white/20 p-2 rounded-lg text-[9px] font-black transition-all">
-                                        {exportingId === cardId ? <div className="spinner"></div> : <SvgIcon name="image" className="w-4 h-4"/>}
+                                <div className="flex gap-2 no-print">
+                                    <button type="button" onClick={() => handleExport(cardId, 'png')} className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-all border border-white/10 flex items-center gap-1 text-[10px] font-bold">
+                                        <SvgIcon name="image" className="w-4 h-4"/> PNG
                                     </button>
-                                    <button type="button" onClick={() => handleExport(cardId, 'pdf')} className="bg-white/10 hover:bg-white/20 p-2 rounded-lg text-[9px] font-black transition-all">
-                                        {exportingId === cardId ? <div className="spinner"></div> : <SvgIcon name="file" className="w-4 h-4"/>}
+                                    <button type="button" onClick={() => handleExport(cardId, 'pdf')} className="bg-white/10 hover:bg-white/20 p-2 rounded-lg transition-all border border-white/10 flex items-center gap-1 text-[10px] font-bold">
+                                        <SvgIcon name="file" className="w-4 h-4"/> PDF
                                     </button>
                                 </div>
                             </div>
@@ -480,7 +492,7 @@
                                     <label className="text-[10px] font-black uppercase opacity-60 mb-2 block">Preço de Venda Sugerido (R$/KG)</label>
                                     <input type="number" step="0.01" value={formData.custoKgManual} onChange={e => setFormData({...formData, custoKgManual: e.target.value})} className="w-full text-4xl font-black bg-transparent border-b-2 border-emerald-400 outline-none placeholder:text-emerald-900" placeholder="0,00" />
                                 </div>
-                                <div className="absolute right-[-20px] bottom-[-20px] opacity-10">
+                                <div className="absolute right-[-20px] bottom-[-20px] opacity-10 text-emerald-800">
                                     <SvgIcon name="cart" className="w-40 h-40" />
                                 </div>
                             </div>
