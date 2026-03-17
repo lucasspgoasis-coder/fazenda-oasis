@@ -27,7 +27,6 @@
         
         .preview-container { position: sticky; top: 24px; }
         
-        /* Estabilização para exportação */
         .export-node { 
             background-color: white; 
             transform: translateZ(0);
@@ -38,7 +37,6 @@
         .no-print { display: block; }
         @media print { .no-print { display: none !important; } }
 
-        /* Loader simples */
         .spinner {
             width: 20px;
             height: 20px;
@@ -65,9 +63,8 @@
     </script>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo } = React;
 
-        // Ícones SVG corrigidos com Fragmentos (<>...</>)
         const SvgIcon = React.memo(({ name, className = "w-4 h-4" }) => {
             const icons = {
                 box: (
@@ -106,26 +103,6 @@
                         <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><circle cx="12" cy="13" r="3"/><path d="M7 3v4h8V3"/>
                     </>
                 ),
-                eye: (
-                    <>
-                        <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0z"/><circle cx="12" cy="12" r="3"/>
-                    </>
-                ),
-                archive: (
-                    <>
-                        <rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/>
-                    </>
-                ),
-                trash: (
-                    <>
-                        <path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
-                    </>
-                ),
-                plus: (
-                    <>
-                        <path d="M5 12h14"/><path d="M12 5v14"/>
-                    </>
-                ),
                 pin: (
                     <>
                         <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/>
@@ -134,6 +111,11 @@
                 chart: (
                     <>
                         <line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>
+                    </>
+                ),
+                hammer: (
+                    <>
+                       <path d="m15 5 4 4"/><path d="M13 7 8.7 2.7a2.41 2.41 0 0 0-3.4 0L2.7 5.3a2.41 2.41 0 0 0 0 3.4L7 13"/><path d="m8 6 2-2"/><path d="m2 22 7-7"/><path d="M11 11a5 5 0 1 1 7 7 5 5 0 0 1-7-7Z"/>
                     </>
                 )
             };
@@ -156,8 +138,9 @@
                 bloco: '', ciclo: '', numCiclo: '', dataInicio: '', dataFim: '', 
                 totalTransplantado: '', totalColhido: '', totalKg: '', totalCaixas: '',
                 volumeTotalAgua: '', custoKgManual: '',
+                litrosDiaManual: '', litrosPlantaManual: '',
                 custosInsumos: [{ descricao: '', valor: '' }],
-                custosOperacionais: [{ categoria: '', valor: '' }]
+                custosOperacionais: [{ descricao: '', valor: '' }]
             });
 
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'fazenda-oasis-v2';
@@ -197,8 +180,7 @@
             const metrics = useMemo(() => {
                 const kg = parseFloat(formData.totalKg) || 0;
                 const colhido = parseFloat(formData.totalColhido) || 0;
-                const transplantado = parseFloat(formData.totalTransplantado) || 0;
-                const aguaTotal = parseFloat(formData.volumeTotalAgua) || 0;
+                
                 const pesoMedioKg = (kg > 0 && colhido > 0) ? (kg / colhido).toFixed(3) : "0.000";
                 
                 let dias = 0;
@@ -208,15 +190,13 @@
                     dias = Math.max(1, Math.ceil((end - start) / (1000 * 60 * 60 * 24)));
                 }
 
-                const litrosDia = dias > 0 ? (aguaTotal / dias).toFixed(2) : "0.00";
-                const litrosPlanta = transplantado > 0 ? (aguaTotal / transplantado).toFixed(2) : "0.00";
                 const totalInsumos = formData.custosInsumos.reduce((a, c) => a + (parseFloat(c.valor) || 0), 0);
                 const totalOperacional = formData.custosOperacionais.reduce((a, c) => a + (parseFloat(c.valor) || 0), 0);
                 
                 return { 
                     diasCiclo: dias, totalInsumos, totalOperacional, 
                     totalGeral: totalInsumos + totalOperacional, 
-                    pesoMedioKg, litrosDia, litrosPlanta
+                    pesoMedioKg
                 };
             }, [formData]);
 
@@ -229,13 +209,13 @@
             const addListItem = (type) => {
                 setFormData(p => ({
                     ...p, 
-                    [type]: [...p[type], type === 'custosInsumos' ? {descricao: '', valor: ''} : {categoria: '', valor: ''}]
+                    [type]: [...p[type], {descricao: '', valor: ''}]
                 }));
             };
 
             const removeListItem = (type, index) => {
                 const newList = formData[type].filter((_, i) => i !== index);
-                if (newList.length === 0) newList.push(type === 'custosInsumos' ? {descricao: '', valor: ''} : {categoria: '', valor: ''});
+                if (newList.length === 0) newList.push({descricao: '', valor: ''});
                 setFormData(p => ({ ...p, [type]: newList }));
             };
 
@@ -252,26 +232,18 @@
                     bloco: '', ciclo: '', numCiclo: '', dataInicio: '', dataFim: '', 
                     totalTransplantado: '', totalColhido: '', totalKg: '', totalCaixas: '',
                     volumeTotalAgua: '', custoKgManual: '',
+                    litrosDiaManual: '', litrosPlantaManual: '',
                     custosInsumos: [{ descricao: '', valor: '' }],
-                    custosOperacionais: [{ categoria: '', valor: '' }]
+                    custosOperacionais: [{ descricao: '', valor: '' }]
                 });
             };
 
             const handleExport = async (id, format) => {
                 const node = document.getElementById(`rel-card-${id}`);
                 if (!node || exportingId) return;
-                
                 setExportingId(id);
-                
                 try {
-                    const canvas = await html2canvas(node, { 
-                        scale: 2, 
-                        useCORS: true, 
-                        allowTaint: true,
-                        backgroundColor: '#ffffff',
-                        logging: false
-                    });
-
+                    const canvas = await html2canvas(node, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', logging: false });
                     if (format === 'png') {
                         const link = document.createElement('a');
                         link.download = `Relatorio_Oasis_${id}.png`;
@@ -285,11 +257,7 @@
                         pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 10, 10, imgWidth, imgHeight);
                         pdf.save(`Relatorio_Oasis_${id}.pdf`);
                     }
-                } catch (err) { 
-                    console.error("Erro na exportação:", err); 
-                } finally { 
-                    setExportingId(null); 
-                }
+                } catch (err) { console.error(err); } finally { setExportingId(null); }
             };
 
             const renderCard = (rel, isPreview = false) => {
@@ -299,7 +267,7 @@
                 return (
                     <div id={`rel-card-${cardId}`} className={`export-node bg-white rounded-[1.5rem] shadow-lg border-2 overflow-hidden ${isPreview ? 'border-amber-400 ring-4 ring-amber-50' : 'border-slate-200'}`}>
                         
-                        {/* Header Identitário */}
+                        {/* Header */}
                         <div className="bg-emerald-900 p-4 flex items-center justify-between">
                             <div className="flex items-center gap-3">
                                 <img src="https://i.imgur.com/qsYPvR2.png" alt="Oasis" className="h-8 w-auto bg-white p-1 rounded-md" crossOrigin="anonymous" />
@@ -334,14 +302,17 @@
                                     <div className="space-y-1.5 text-[10px] font-bold">
                                         <div className="flex justify-between text-slate-500"><span>Transp.:</span> <span>{rel.totalTransplantado || 0}</span></div>
                                         <div className="flex justify-between text-emerald-600"><span>Colhido:</span> <span>{rel.totalColhido || 0}</span></div>
-                                        <div className="flex justify-between text-slate-500"><span>Total:</span> <span>{rel.totalKg || 0}kg</span></div>
+                                        <div className="flex justify-between text-slate-500 font-black"><span>Total:</span> <span>{rel.totalKg || 0}kg</span></div>
                                     </div>
                                 </div>
-                                <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
-                                    <p className="text-[8px] font-black text-emerald-500 uppercase mb-2 flex items-center gap-1"><SvgIcon name="package" className="w-2.5 h-2.5 text-emerald-400"/> Logística</p>
+                                <div className="p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 flex flex-col justify-center">
+                                    <p className="text-[8px] font-black text-emerald-500 uppercase mb-2 flex items-center gap-1"><SvgIcon name="package" className="w-2.5 h-2.5 text-emerald-400"/> Médias & Caixas</p>
                                     <div className="space-y-1.5 text-[10px] font-bold">
-                                        <div className="flex justify-between text-emerald-600"><span>Peso Médio:</span> <span>{m.pesoMedioKg}kg</span></div>
-                                        <div className="flex justify-between text-emerald-800"><span>Caixas:</span> <span>{rel.totalCaixas || 0}</span></div>
+                                        <div className="flex justify-between text-emerald-900 font-black bg-emerald-100 p-1 rounded">
+                                            <span>Média Peso:</span> 
+                                            <span>{m.pesoMedioKg} kg/un</span>
+                                        </div>
+                                        <div className="flex justify-between text-emerald-800"><span>Total Caixas:</span> <span>{rel.totalCaixas || 0}</span></div>
                                     </div>
                                 </div>
                             </div>
@@ -350,22 +321,52 @@
                                 <p className="text-[8px] font-black text-blue-500 uppercase mb-2 flex items-center justify-center gap-1"><SvgIcon name="droplets" className="w-2.5 h-2.5 text-blue-300"/> Consumo Hídrico</p>
                                 <div className="grid grid-cols-3 gap-1 text-[10px] font-bold">
                                     <div><p className="text-[7px] text-blue-400">TOTAL</p><p>{rel.volumeTotalAgua || 0}L</p></div>
-                                    <div><p className="text-[7px] text-blue-400">L/DIA</p><p>{m.litrosDia}L</p></div>
-                                    <div><p className="text-[7px] text-blue-400">L/PLANT</p><p>{m.litrosPlanta}L</p></div>
+                                    <div><p className="text-[7px] text-blue-400">L/DIA</p><p>{rel.litrosDiaManual || '0.00'}L</p></div>
+                                    <div><p className="text-[7px] text-blue-400">L/PLANT</p><p>{rel.litrosPlantaManual || '0.00'}L</p></div>
                                 </div>
                             </div>
 
-                            <div className="p-3 bg-white border border-slate-100 rounded-xl">
-                                <p className="text-[8px] font-black text-slate-400 uppercase mb-2 flex items-center gap-1"><SvgIcon name="zap" className="w-2.5 h-2.5 text-slate-300"/> Investimento</p>
-                                <div className="space-y-1 text-[9px] font-bold">
-                                    <div className="flex justify-between"><span>Insumos</span> <span>R$ {m.totalInsumos.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
-                                    <div className="flex justify-between"><span>Operacional</span> <span>R$ {m.totalOperacional.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></div>
+                            <div className="p-3 bg-white border border-slate-100 rounded-xl space-y-3">
+                                <p className="text-[8px] font-black text-slate-400 uppercase flex items-center gap-1"><SvgIcon name="zap" className="w-2.5 h-2.5 text-slate-300"/> Detalhamento do Investimento</p>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <p className="text-[7px] font-black text-emerald-600 uppercase">1. Insumos</p>
+                                        <div className="space-y-0.5 border-l-2 border-emerald-50 pl-2">
+                                            {rel.custosInsumos?.map((c, i) => c.descricao && (
+                                                <div key={i} className="flex justify-between text-[8px] text-slate-500 font-semibold italic">
+                                                    <span className="truncate max-w-[60px]">{c.descricao}</span>
+                                                    <span>R$ {parseFloat(c.valor || 0).toFixed(2)}</span>
+                                                </div>
+                                            ))}
+                                            <div className="flex justify-between text-[9px] font-black text-emerald-700 pt-1 border-t border-emerald-50 mt-1">
+                                                <span>Subtotal</span>
+                                                <span>R$ {m.totalInsumos.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-1">
+                                        <p className="text-[7px] font-black text-blue-600 uppercase">2. Operacional</p>
+                                        <div className="space-y-0.5 border-l-2 border-blue-50 pl-2">
+                                            {rel.custosOperacionais?.map((c, i) => c.descricao && (
+                                                <div key={i} className="flex justify-between text-[8px] text-slate-500 font-semibold italic">
+                                                    <span className="truncate max-w-[60px]">{c.descricao}</span>
+                                                    <span>R$ {parseFloat(c.valor || 0).toFixed(2)}</span>
+                                                </div>
+                                            ))}
+                                            <div className="flex justify-between text-[9px] font-black text-blue-700 pt-1 border-t border-blue-50 mt-1">
+                                                <span>Subtotal</span>
+                                                <span>R$ {m.totalOperacional.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
                             <div className={`flex justify-between items-center p-3 rounded-xl ${isPreview ? 'bg-amber-600' : 'bg-emerald-950'} text-white`}>
                                 <div className="flex flex-col">
-                                    <span className="text-[8px] font-black uppercase opacity-60">Total Ciclo</span>
+                                    <span className="text-[8px] font-black uppercase opacity-60">Custo Total do Ciclo</span>
                                     <span className="text-base font-black text-amber-300 leading-tight">R$ {m.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                                 </div>
                                 <div className="flex gap-1 no-print">
@@ -383,8 +384,8 @@
             };
 
             if (loading) return (
-                <div className="min-h-screen flex items-center justify-center bg-emerald-900 text-white font-black uppercase tracking-widest">
-                    A Ligar à Fazenda...
+                <div className="min-h-screen flex items-center justify-center bg-emerald-900 text-white font-black uppercase tracking-widest text-xs italic">
+                    CONECTANDO AO SISTEMA OASIS...
                 </div>
             );
 
@@ -394,77 +395,125 @@
                         <div className="max-w-7xl mx-auto flex justify-between items-center text-white">
                             <div className="flex items-center gap-4">
                                 <img src="https://i.imgur.com/qsYPvR2.png" alt="Oasis" className="h-8 bg-white p-1 rounded" crossOrigin="anonymous" />
-                                <h1 className="text-lg font-black uppercase tracking-tighter">Oasis | Controlo de Produção</h1>
+                                <h1 className="text-lg font-black uppercase tracking-tighter italic">Oasis | Gestão de Produção</h1>
                             </div>
                         </div>
                     </header>
 
                     <main className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-8">
                         <form onSubmit={handleSubmit} className="space-y-6 no-print">
+                            {/* Localização */}
                             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 space-y-4">
                                 <h2 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><SvgIcon name="pin" className="w-3 h-3"/> Localização</h2>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="col-span-2"><input required value={formData.bloco} onChange={e => setFormData({...formData, bloco: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" placeholder="Bloco / Área" /></div>
                                     <div><input required value={formData.ciclo} onChange={e => setFormData({...formData, ciclo: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" placeholder="Cultura" /></div>
                                     <div><input type="number" required value={formData.numCiclo} onChange={e => setFormData({...formData, numCiclo: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" placeholder="Ciclo #" /></div>
-                                    <div><label className="text-[9px] font-black text-slate-400 block mb-1 uppercase">Data Início</label><input type="date" required value={formData.dataInicio} onChange={e => setFormData({...formData, dataInicio: e.target.value})} className="w-full p-2 bg-slate-50 border rounded-xl font-bold text-xs" /></div>
-                                    <div><label className="text-[9px] font-black text-slate-400 block mb-1 uppercase">Data Fim</label><input type="date" required value={formData.dataFim} onChange={e => setFormData({...formData, dataFim: e.target.value})} className="w-full p-2 bg-slate-50 border rounded-xl font-bold text-xs" /></div>
+                                    <div><label className="text-[9px] font-black text-slate-400 block mb-1 uppercase text-center">Início</label><input type="date" required value={formData.dataInicio} onChange={e => setFormData({...formData, dataInicio: e.target.value})} className="w-full p-2 bg-slate-50 border rounded-xl font-bold text-xs" /></div>
+                                    <div><label className="text-[9px] font-black text-slate-400 block mb-1 uppercase text-center">Fim</label><input type="date" required value={formData.dataFim} onChange={e => setFormData({...formData, dataFim: e.target.value})} className="w-full p-2 bg-slate-50 border rounded-xl font-bold text-xs" /></div>
                                 </div>
                             </div>
 
+                            {/* Métricas */}
                             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 space-y-4">
-                                <h2 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><SvgIcon name="chart" className="w-3 h-3"/> Métricas de Produção</h2>
+                                <h2 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2"><SvgIcon name="chart" className="w-3 h-3"/> Métricas de Colheita</h2>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div className="col-span-2"><input type="number" placeholder="Total Transplantado" value={formData.totalTransplantado} onChange={e => setFormData({...formData, totalTransplantado: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" /></div>
+                                    <div className="col-span-2"><input type="number" placeholder="Total Transplantado (Un)" value={formData.totalTransplantado} onChange={e => setFormData({...formData, totalTransplantado: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" /></div>
                                     <div><input type="number" placeholder="Colhido (Un)" value={formData.totalColhido} onChange={e => setFormData({...formData, totalColhido: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" /></div>
                                     <div><input type="number" step="0.001" placeholder="Total (KG)" value={formData.totalKg} onChange={e => setFormData({...formData, totalKg: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" /></div>
-                                    <div><input type="number" placeholder="Caixas" value={formData.totalCaixas} onChange={e => setFormData({...formData, totalCaixas: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" /></div>
-                                    <div><input type="number" placeholder="Água (Litros)" value={formData.volumeTotalAgua} onChange={e => setFormData({...formData, volumeTotalAgua: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" /></div>
+                                    <div className="col-span-2"><input type="number" placeholder="Total Caixas" value={formData.totalCaixas} onChange={e => setFormData({...formData, totalCaixas: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-100 rounded-xl font-bold" /></div>
                                 </div>
                             </div>
 
+                            {/* Consumo Hídrico Manual */}
+                            <div className="bg-blue-900 p-6 rounded-[2rem] shadow-sm space-y-4">
+                                <h2 className="text-xs font-black uppercase text-blue-200 flex items-center gap-2"><SvgIcon name="droplets" className="w-3 h-3 text-blue-400"/> Consumo Hídrico (Manual)</h2>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[8px] font-black text-blue-300 uppercase px-1">Total (L)</label>
+                                        <input type="number" value={formData.volumeTotalAgua} onChange={e => setFormData({...formData, volumeTotalAgua: e.target.value})} className="w-full p-3 bg-blue-800 border-2 border-blue-700 rounded-xl font-bold text-white placeholder:text-blue-500" placeholder="0" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[8px] font-black text-blue-300 uppercase px-1">Ltrs/Dia</label>
+                                        <input type="number" step="0.01" value={formData.litrosDiaManual} onChange={e => setFormData({...formData, litrosDiaManual: e.target.value})} className="w-full p-3 bg-blue-800 border-2 border-blue-700 rounded-xl font-bold text-white placeholder:text-blue-500" placeholder="0.00" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[8px] font-black text-blue-300 uppercase px-1">Ltrs/Plant</label>
+                                        <input type="number" step="0.01" value={formData.litrosPlantaManual} onChange={e => setFormData({...formData, litrosPlantaManual: e.target.value})} className="w-full p-3 bg-blue-800 border-2 border-blue-700 rounded-xl font-bold text-white placeholder:text-blue-500" placeholder="0.00" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Custos Insumos */}
                             <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 space-y-4">
-                                <div className="flex justify-between items-center border-b pb-2">
-                                    <h2 className="text-xs font-black uppercase text-slate-400">Custos & Investimento</h2>
-                                    <button type="button" onClick={() => addListItem('custosInsumos')} className="text-emerald-600 text-[10px] font-black uppercase">+ Insumo</button>
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-xs font-black uppercase text-emerald-600 flex items-center gap-2"><SvgIcon name="zap" className="w-3 h-3"/> 1. Insumos</h2>
+                                    <button type="button" onClick={() => addListItem('custosInsumos')} className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase">+ Adicionar</button>
                                 </div>
                                 {formData.custosInsumos.map((item, idx) => (
-                                    <div key={idx} className="flex gap-2">
-                                        <input placeholder="Descrição" value={item.descricao} onChange={e => updateListItem('custosInsumos', idx, 'descricao', e.target.value)} className="flex-1 p-2 text-xs bg-slate-50 border rounded-xl font-semibold" />
-                                        <input type="number" step="0.01" placeholder="R$" value={item.valor} onChange={e => updateListItem('custosInsumos', idx, 'valor', e.target.value)} className="w-20 p-2 text-xs bg-slate-50 border rounded-xl font-bold" />
-                                        <button type="button" onClick={() => removeListItem('custosInsumos', idx)} className="text-red-400">×</button>
+                                    <div key={idx} className="flex gap-2 items-center animate-in slide-in-from-left-2 duration-200">
+                                        <input placeholder="Ex: Sementes" value={item.descricao} onChange={e => updateListItem('custosInsumos', idx, 'descricao', e.target.value)} className="flex-1 p-3 text-xs bg-slate-50 border-2 border-slate-100 rounded-xl font-semibold focus:border-emerald-200 outline-none" />
+                                        <input type="number" step="0.01" placeholder="R$ 0,00" value={item.valor} onChange={e => updateListItem('custosInsumos', idx, 'valor', e.target.value)} className="w-24 p-3 text-xs bg-slate-50 border-2 border-slate-100 rounded-xl font-bold focus:border-emerald-200 outline-none" />
+                                        <button type="button" onClick={() => removeListItem('custosInsumos', idx)} className="text-red-400 font-bold px-2 hover:bg-red-50 rounded-lg">×</button>
                                     </div>
                                 ))}
                             </div>
 
-                            <div className="bg-emerald-950 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
-                                <label className="text-[10px] font-black uppercase opacity-60 mb-2 block">Preço de Venda (R$/KG)</label>
-                                <input type="number" step="0.01" value={formData.custoKgManual} onChange={e => setFormData({...formData, custoKgManual: e.target.value})} className="w-full text-4xl font-black bg-transparent border-b-2 border-emerald-400 outline-none" placeholder="0,00" />
+                            {/* Custos Operacionais */}
+                            <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-xs font-black uppercase text-blue-600 flex items-center gap-2"><SvgIcon name="hammer" className="w-3 h-3"/> 2. Operacional</h2>
+                                    <button type="button" onClick={() => addListItem('custosOperacionais')} className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase">+ Adicionar</button>
+                                </div>
+                                {formData.custosOperacionais.map((item, idx) => (
+                                    <div key={idx} className="flex gap-2 items-center animate-in slide-in-from-left-2 duration-200">
+                                        <input placeholder="Ex: Mão de Obra" value={item.descricao} onChange={e => updateListItem('custosOperacionais', idx, 'descricao', e.target.value)} className="flex-1 p-3 text-xs bg-slate-50 border-2 border-slate-100 rounded-xl font-semibold focus:border-blue-200 outline-none" />
+                                        <input type="number" step="0.01" placeholder="R$ 0,00" value={item.valor} onChange={e => updateListItem('custosOperacionais', idx, 'valor', e.target.value)} className="w-24 p-3 text-xs bg-slate-50 border-2 border-slate-100 rounded-xl font-bold focus:border-blue-200 outline-none" />
+                                        <button type="button" onClick={() => removeListItem('custosOperacionais', idx)} className="text-red-400 font-bold px-2 hover:bg-red-50 rounded-lg">×</button>
+                                    </div>
+                                ))}
                             </div>
 
-                            <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-6 rounded-[2rem] uppercase shadow-xl active:scale-95 transition-all">
-                                Guardar Registo no Histórico
+                            {/* Preço de Venda */}
+                            <div className="bg-emerald-950 p-8 rounded-[2.5rem] text-white shadow-2xl relative overflow-hidden">
+                                <div className="relative z-10">
+                                    <label className="text-[10px] font-black uppercase opacity-60 mb-2 block">Preço de Venda Sugerido (R$/KG)</label>
+                                    <input type="number" step="0.01" value={formData.custoKgManual} onChange={e => setFormData({...formData, custoKgManual: e.target.value})} className="w-full text-4xl font-black bg-transparent border-b-2 border-emerald-400 outline-none placeholder:text-emerald-900" placeholder="0,00" />
+                                </div>
+                                <div className="absolute right-[-20px] bottom-[-20px] opacity-10">
+                                    <SvgIcon name="cart" className="w-40 h-40" />
+                                </div>
+                            </div>
+
+                            <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-6 rounded-[2rem] uppercase shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
+                                <SvgIcon name="save" className="w-5 h-5"/>
+                                Gravar Relatório
                             </button>
                         </form>
 
                         <div className="space-y-8">
                             <div className="preview-container space-y-4 no-print">
-                                <h2 className="text-[10px] font-black uppercase text-amber-600 px-4">Pré-visualização</h2>
+                                <h2 className="text-[10px] font-black uppercase text-amber-600 px-4 flex items-center gap-2">
+                                    <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"></span>
+                                    Pré-visualização em Tempo Real
+                                </h2>
                                 {renderCard(formData, true)}
                             </div>
                             
                             <div className="space-y-4">
-                                <h2 className="text-[10px] font-black uppercase text-slate-400 px-4">Histórico de Ciclos</h2>
-                                {relatorios.map(rel => (
-                                    <div key={rel.id}>{renderCard(rel, false)}</div>
+                                <h2 className="text-[10px] font-black uppercase text-slate-400 px-4">Histórico Guardado</h2>
+                                {relatorios.length === 0 ? (
+                                    <div className="p-10 border-4 border-dashed border-slate-200 rounded-[2rem] text-center text-slate-300 font-black uppercase text-[10px]">
+                                        Nenhum registo encontrado
+                                    </div>
+                                ) : relatorios.map(rel => (
+                                    <div key={rel.id} className="animate-in fade-in zoom-in-95 duration-300">
+                                        {renderCard(rel, false)}
+                                    </div>
                                 ))}
                             </div>
                         </div>
                     </main>
-                    
-                    <footer className="mt-20 py-10 border-t border-slate-200 text-center no-print">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fazenda Oasis &copy; 2024 - Sistema de Controlo</p>
-                    </footer>
                 </div>
             );
         };
