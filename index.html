@@ -10,7 +10,19 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'fazenda-oasis-v2';
 
-// Componente de Ícones SVG para evitar dependências externas pesadas
+// Injeção de scripts externos para exportação
+const loadScript = (src) => {
+    return new Promise((resolve, reject) => {
+        if (document.querySelector(`script[src="${src}"]`)) return resolve();
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+};
+
+// Componente de Ícones SVG
 const SvgIcon = ({ name, className = "w-4 h-4" }) => {
     const icons = {
         box: <><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></>,
@@ -61,6 +73,11 @@ export default function App() {
             }
         };
         initAuth();
+        
+        // Carrega bibliotecas de exportação antecipadamente
+        loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+        loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+
         return onAuthStateChanged(auth, (u) => {
             setUser(u);
             setLoading(false);
@@ -78,7 +95,7 @@ export default function App() {
         return () => unsubscribe();
     }, [user]);
 
-    // Cálculos Derivados (Métricas)
+    // Cálculos Derivados
     const metrics = useMemo(() => {
         const kg = parseFloat(formData.totalKg) || 0;
         const colhido = parseFloat(formData.totalColhido) || 0;
@@ -165,8 +182,17 @@ export default function App() {
         setExportingId(id);
         
         try {
-            const html2canvas = (await import('html2canvas')).default;
-            const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+            // Verifica se html2canvas está carregado
+            if (typeof window.html2canvas === 'undefined') {
+                await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+            }
+
+            const canvas = await window.html2canvas(node, { 
+                scale: 2, 
+                useCORS: true, 
+                backgroundColor: '#ffffff',
+                logging: false
+            });
             
             if (format === 'png') {
                 const link = document.createElement('a');
@@ -174,7 +200,10 @@ export default function App() {
                 link.href = canvas.toDataURL('image/png');
                 link.click();
             } else {
-                const { jsPDF } = await import('jspdf');
+                if (typeof window.jspdf === 'undefined') {
+                    await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+                }
+                const { jsPDF } = window.jspdf;
                 const pdf = new jsPDF('p', 'mm', 'a4');
                 const imgWidth = 190;
                 const imgHeight = (canvas.height * imgWidth) / canvas.width;
@@ -183,6 +212,8 @@ export default function App() {
             }
         } catch (err) {
             console.error("Erro na exportação:", err);
+            // Fallback usando print nativo se o canvas falhar severamente
+            if (format === 'pdf') window.print();
         } finally {
             setExportingId(null);
         }
@@ -215,7 +246,6 @@ export default function App() {
                 {/* Lado Esquerdo: Formulário */}
                 <section className="space-y-6">
                     <form onSubmit={handleSubmit} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 space-y-8">
-                        {/* Seção 1: Localização e Período */}
                         <div>
                             <h2 className="text-xs font-black uppercase text-slate-400 mb-4 flex items-center gap-2">
                                 <SvgIcon name="pin" className="w-3 h-3"/> Localização e Período
@@ -241,7 +271,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Seção 2: Produção */}
                         <div>
                             <h2 className="text-xs font-black uppercase text-slate-400 mb-4 flex items-center gap-2">
                                 <SvgIcon name="chart" className="w-3 h-3"/> Dados de Produção
@@ -254,9 +283,7 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Seção 3: Detalhamento Financeiro */}
                         <div className="space-y-6">
-                            {/* Insumos */}
                             <div>
                                 <div className="flex justify-between items-center mb-4">
                                     <h2 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2">
@@ -277,7 +304,6 @@ export default function App() {
                                 </div>
                             </div>
 
-                            {/* Operacional */}
                             <div>
                                 <div className="flex justify-between items-center mb-4">
                                     <h2 className="text-xs font-black uppercase text-slate-400 flex items-center gap-2">
@@ -299,7 +325,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Seção 4: Hídrico */}
                         <div className="bg-blue-900 p-6 rounded-[2rem] text-white">
                             <h2 className="text-xs font-black uppercase text-blue-300 mb-4 flex items-center gap-2">
                                 <SvgIcon name="droplets" className="w-3 h-3"/> Consumo Hídrico Manual
@@ -320,7 +345,6 @@ export default function App() {
                             </div>
                         </div>
 
-                        {/* Custo Médio Alvo */}
                         <div>
                              <label className="text-xs font-black uppercase text-slate-400 mb-2 block">Custo Final Estimado (R$/kg)</label>
                              <input value={formData.custoKgManual} onChange={e => setFormData({...formData, custoKgManual: e.target.value})} className="w-full p-4 bg-emerald-50 border-2 border-emerald-100 rounded-2xl text-xl font-black text-emerald-900 outline-none" placeholder="0,00" />
@@ -332,18 +356,23 @@ export default function App() {
                     </form>
                 </section>
 
-                {/* Lado Direito: Preview e Lista */}
+                {/* Lado Direito */}
                 <section className="space-y-8">
-                    {/* Card de Visualização em Tempo Real */}
                     <div className="sticky top-28">
                         <div className="mb-4 flex items-center justify-between">
                             <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest italic">Visualização Prévia</h2>
                             <span className="px-3 py-1 bg-amber-100 text-amber-700 text-[10px] font-black rounded-full uppercase">Pendente</span>
                         </div>
-                        <RelatorioCard rel={formData} metrics={metrics} isPreview={true} onDelete={() => {}} onExport={() => {}} />
+                        <RelatorioCard 
+                            rel={formData} 
+                            metrics={metrics} 
+                            isPreview={true} 
+                            onDelete={() => {}} 
+                            onExport={(format) => handleExport('preview', format)} 
+                            isExporting={exportingId === 'preview'}
+                        />
                     </div>
 
-                    {/* Histórico */}
                     <div className="space-y-6 pt-10">
                         <h2 className="text-xl font-black text-slate-800 flex items-center gap-3">
                             <span className="w-2 h-8 bg-emerald-500 rounded-full"></span>
@@ -368,13 +397,11 @@ export default function App() {
     );
 }
 
-// Sub-componente para o Card do Relatório
 function RelatorioCard({ rel, metrics, isPreview = false, onDelete, onExport, isExporting }) {
     const cardId = isPreview ? 'preview' : rel.id;
     
     return (
         <div id={`rel-card-${cardId}`} className={`bg-white rounded-[2rem] shadow-xl border-2 overflow-hidden transition-all duration-300 ${isPreview ? 'border-amber-400 ring-4 ring-amber-50' : 'border-slate-100 hover:border-emerald-200'}`}>
-            {/* Header Visual */}
             <div className="bg-emerald-900 p-5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <img src="https://i.imgur.com/qsYPvR2.png" alt="Oasis" className="h-8 w-auto bg-white p-1 rounded-lg" />
@@ -390,7 +417,6 @@ function RelatorioCard({ rel, metrics, isPreview = false, onDelete, onExport, is
                 )}
             </div>
 
-            {/* Info Principal */}
             <div className={`p-6 border-b flex justify-between items-start ${isPreview ? 'bg-amber-50' : 'bg-slate-50'}`}>
                 <div>
                     <div className="flex gap-2 mb-2">
@@ -408,7 +434,6 @@ function RelatorioCard({ rel, metrics, isPreview = false, onDelete, onExport, is
             </div>
 
             <div className="p-6 space-y-6">
-                {/* Grades de Produção */}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                         <p className="text-[9px] font-black text-slate-400 uppercase mb-3 flex items-center gap-1">
@@ -434,7 +459,6 @@ function RelatorioCard({ rel, metrics, isPreview = false, onDelete, onExport, is
                     </div>
                 </div>
 
-                {/* Hídrico */}
                 <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100">
                     <p className="text-[9px] font-black text-blue-500 uppercase mb-3 flex items-center justify-center gap-1">
                         <SvgIcon name="droplets" className="w-3 h-3"/> Performance Hídrica
@@ -446,13 +470,11 @@ function RelatorioCard({ rel, metrics, isPreview = false, onDelete, onExport, is
                     </div>
                 </div>
 
-                {/* Detalhamento Financeiro */}
                 <div className="space-y-5 bg-slate-50 p-5 rounded-2xl border border-slate-100">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-2 flex items-center gap-2">
                         <SvgIcon name="zap" className="w-3 h-3" /> Detalhamento do Investimento
                     </p>
                     
-                    {/* Lista Insumos */}
                     <div className="space-y-2">
                         <p className="text-[9px] font-black text-emerald-600 uppercase">1. Insumos</p>
                         {rel.custosInsumos?.filter(c => c.descricao).map((c, i) => (
@@ -467,7 +489,6 @@ function RelatorioCard({ rel, metrics, isPreview = false, onDelete, onExport, is
                         </div>
                     </div>
 
-                    {/* Lista Operacional */}
                     <div className="space-y-2">
                         <p className="text-[9px] font-black text-blue-600 uppercase">2. Operacional</p>
                         {rel.custosOperacionais?.filter(c => c.descricao).map((c, i) => (
@@ -483,22 +504,19 @@ function RelatorioCard({ rel, metrics, isPreview = false, onDelete, onExport, is
                     </div>
                 </div>
 
-                {/* Rodapé e Ações */}
                 <div className={`p-5 rounded-2xl flex items-center justify-between shadow-inner ${isPreview ? 'bg-amber-600' : 'bg-emerald-950'} text-white`}>
                     <div>
                         <span className="text-[10px] font-bold uppercase opacity-60 block tracking-tighter">Investimento Total</span>
                         <span className="text-2xl font-black text-amber-300">R$ {metrics.totalGeral.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span>
                     </div>
-                    {!isPreview && (
-                        <div className="flex gap-2">
-                            <button disabled={isExporting} onClick={() => onExport('png')} className="bg-white/10 hover:bg-white/20 p-3 rounded-xl transition-all flex items-center gap-2 text-[10px] font-black">
-                                <SvgIcon name="image" className="w-4 h-4" /> PNG
-                            </button>
-                            <button disabled={isExporting} onClick={() => onExport('pdf')} className="bg-white/10 hover:bg-white/20 p-3 rounded-xl transition-all flex items-center gap-2 text-[10px] font-black">
-                                <SvgIcon name="file" className="w-4 h-4" /> PDF
-                            </button>
-                        </div>
-                    )}
+                    <div className="flex gap-2">
+                        <button disabled={isExporting} onClick={() => onExport('png')} className="bg-white/10 hover:bg-white/20 p-3 rounded-xl transition-all flex items-center gap-2 text-[10px] font-black">
+                            {isExporting ? '...' : <><SvgIcon name="image" className="w-4 h-4" /> PNG</>}
+                        </button>
+                        <button disabled={isExporting} onClick={() => onExport('pdf')} className="bg-white/10 hover:bg-white/20 p-3 rounded-xl transition-all flex items-center gap-2 text-[10px] font-black">
+                            {isExporting ? '...' : <><SvgIcon name="file" className="w-4 h-4" /> PDF</>}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
